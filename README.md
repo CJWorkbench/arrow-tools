@@ -119,3 +119,9 @@ Deploying
 3. `git tag VERSION` (use semver -- e.g., `v1.2.3`)
 4. `git push --tags && git push`
 5. Wait; Docker Hub will publish the new image
+
+
+License
+=======
+
+MIT
