@@ -21,3 +21,7 @@ include_directories(SYSTEM ${ARROW_INCLUDE_DIR} ${PARQUET_INCLUDE_DIR} ${GFLAGS_
 
 add_executable(csv-to-arrow src/csv-to-arrow.cc src/common.cc)
 target_link_libraries(csv-to-arrow ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} glog::glog double-conversion::double-conversion ${GFLAGS_STATIC_LDFLAGS} -static -lpthread -lboost_filesystem -lboost_system)
+
+add_executable(json-to-arrow src/json-to-arrow.cc src/common.cc src/json-warnings.cc)
+target_include_directories(json-to-arrow PRIVATE vendor/rapidjson-1.1.0 ${double-conversion_INCLUDE_DIR})
+target_link_libraries(json-to-arrow ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} glog::glog double-conversion::double-conversion ${GFLAGS_STATIC_LDFLAGS} -static -lpthread -lboost_filesystem -lboost_system)

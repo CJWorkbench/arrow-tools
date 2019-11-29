@@ -30,7 +30,6 @@ def do_convert(
             str(csv_path),
             arrow_file.name,
         ]
-        print(repr(args))
         try:
             result = subprocess.run(
                 args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True

@@ -34,7 +34,7 @@ RUN true \
       && curl -Oapache-arrow-0.15.1.tar.gz --location http://archive.apache.org/dist/arrow/arrow-0.15.1/apache-arrow-0.15.1.tar.gz \
       && tar zxf apache-arrow-0.15.1.tar.gz \
       && cd apache-arrow-0.15.1/cpp \
-      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release . \
+      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Debug . \
       && make -j4 arrow \
       && make install
 
@@ -53,10 +53,11 @@ WORKDIR /app
 FROM cpp-builddeps AS cpp-build
 
 RUN mkdir -p /app/src
-RUN touch /app/src/csv-to-arrow.cc /app/src/common.cc
+COPY vendor/ /app/vendor/
+RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/json-warnings.cc /app/src/common.cc
 WORKDIR /app
 COPY CMakeLists.txt /app
-RUN cmake -DCMAKE_BUILD_TYPE=Release .
+RUN cmake -DCMAKE_BUILD_TYPE=Debug .
 
 COPY src/ /app/src/
 RUN make -j4
@@ -65,6 +66,7 @@ RUN make -j4
 FROM python-dev AS test
 
 COPY --from=cpp-build /app/csv-to-arrow /usr/bin/csv-to-arrow
+COPY --from=cpp-build /app/json-to-arrow /usr/bin/json-to-arrow
 COPY tests/ /app/tests/
 WORKDIR /app
 RUN pytest -vv
@@ -72,3 +74,4 @@ RUN pytest -vv
 
 FROM scratch AS dist
 COPY --from=cpp-build /app/csv-to-arrow /usr/bin/csv-to-arrow
+COPY --from=cpp-build /app/json-to-arrow /usr/bin/json-to-arrow
