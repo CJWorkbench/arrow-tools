@@ -3,11 +3,12 @@
 #include <gflags/gflags.h>
 
 #include "json-warnings.h"
+#include "string-buffer.h"
 
 DECLARE_uint64(max_rows);
-DECLARE_uint64(max_columns);
+DECLARE_uint32(max_columns);
 DECLARE_uint32(max_bytes_per_value);
-DECLARE_uint64(max_bytes_per_column_name);
+DECLARE_uint32(max_bytes_per_column_name);
 DECLARE_uint64(max_bytes_total);
 
 void printWarnings(const Warnings& warnings)
@@ -30,7 +31,7 @@ void printWarnings(const Warnings& warnings)
     }
 
     if (warnings.nColumnsSkipped) {
-        printf("skipped column %s%s(after column limit of %d)\n", warnings.firstColumnSkipped.c_str(), warnings.nColumnsSkipped > 1 ? " and more" : "", FLAGS_max_columns);
+        printf("skipped column %s%s (after column limit of %d)\n", warnings.firstColumnSkipped.c_str(), warnings.nColumnsSkipped > 1 ? " and more" : "", FLAGS_max_columns);
     }
     if (warnings.nColumnsNull) {
         printf("chose string type for null column %s%s\n", warnings.firstColumnNull.c_str(), warnings.nColumnsNull > 1 ? " and more" : "");
@@ -39,7 +40,17 @@ void printWarnings(const Warnings& warnings)
         printf("truncated %d column names; example %s\n", warnings.nColumnNamesTruncated, warnings.firstColumnNameTruncated.c_str());
     }
     if (warnings.nColumnNamesInvalid) {
-        printf("ignored invalid column %s%s\n", warnings.firstColumnNameInvalid.c_str(), warnings.nColumnNamesInvalid > 1 ? " and more" : "");
+        // JSON-encode. Max size of an invalid column name is sum of:
+        // * 2 bytes for quotation marks
+        // * 6 bytes per char (because '\0' expands to "\u0000")
+        //   (No need to worry about UTF-16 surrogate pairs: we don't escape
+        //   anything outside of ASCII, and we don't pass-through surrogate
+        //   pairs.)
+        // * 1 byte for ending '\0' (to help printf)
+        StringBuffer buf(3 + warnings.firstColumnNameInvalid.size() * 6);
+        buf.appendAsJsonQuotedString(reinterpret_cast<const uint8_t*>(warnings.firstColumnNameInvalid.c_str()), warnings.firstColumnNameInvalid.size());
+        buf.append('\0');
+        printf("ignored invalid column %s%s\n", reinterpret_cast<const char*>(&buf.bytes[0]), warnings.nColumnNamesInvalid > 1 ? " and more" : "");
     }
     if (warnings.nColumnNamesDuplicated) {
         printf("ignored duplicate column %s%s starting at row %d\n", warnings.firstColumnNameDuplicated.c_str(), warnings.nColumnNamesDuplicated > 1 ? " and more" : "", warnings.firstColumnNameDuplicatedRow);

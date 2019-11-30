@@ -121,8 +121,8 @@ struct Warnings
         this->badRootValue = value.copyUtf8String();
     }
 
-    void warnRowSkipped() {
-        this->nRowsSkipped++;
+    void warnRowsSkipped(size_t nRows) {
+        this->nRowsSkipped = nRows;
     }
 
     void warnStoppedOutOfMemory() {

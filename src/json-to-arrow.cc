@@ -21,7 +21,7 @@
 #include "rapidjson/reader.h"
 
 DEFINE_uint64(max_rows, std::numeric_limits<uint64_t>::max(), "Skip rows after parsing this many");
-DEFINE_uint64(max_columns, std::numeric_limits<uint64_t>::max(), "Skip columns after parsing this many");
+DEFINE_uint32(max_columns, std::numeric_limits<uint32_t>::max(), "Skip columns after parsing this many");
 DEFINE_uint32(max_bytes_per_value, 1024 * 32, "Truncate each value to at most this size");
 DEFINE_uint32(max_bytes_per_error_value, 100, "Truncate each error-message value to at most this size");
 DEFINE_uint64(max_bytes_per_column_name, 1024, "Truncate each column header to at most this size");
@@ -301,23 +301,31 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
 
             case IN_RECORD:
                 if (this->nestLevel == 0) {
-                    // Enter a column
-                    this->keyBuf.append(str, len);
-                    std::string_view name(this->keyBuf.toUtf8StringView());
-                    TableBuilder::FoundColumnOrNull foundColumn = this->tableBuilder.findOrCreateColumnOrNull(this->row, name, this->warnings);
-                    if (foundColumn.columnOrNull) {
-                        if (foundColumn.columnOrNull->length() > this->row) {
-                            // do not set this->column: we already have a value
-                            // in this row for this column.
-                            this->warnings.warnColumnNameDuplicated(this->row, this->keyBuf);
-                        } else {
-                            this->column = foundColumn.columnOrNull;
-                            if (foundColumn.isNew && this->keyBuf.hasOverflow()) {
-                                this->warnings.warnColumnNameTruncated(foundColumn.columnOrNull->name);
+                    if (this->row < FLAGS_max_rows) {
+                        // Enter a column
+                        this->keyBuf.append(str, len);
+                        std::string_view name(this->keyBuf.toUtf8StringView());
+                        TableBuilder::FoundColumnOrNull foundColumn = this->tableBuilder.findOrCreateColumnOrNull(this->row, name, this->warnings);
+                        if (foundColumn.columnOrNull) {
+                            if (foundColumn.columnOrNull->length() > this->row) {
+                                // do not set this->column: we already have a value
+                                // in this row for this column.
+                                this->warnings.warnColumnNameDuplicated(this->row, this->keyBuf);
+                            } else {
+                                this->column = foundColumn.columnOrNull;
+                                if (foundColumn.isNew && this->keyBuf.hasOverflow()) {
+                                    this->warnings.warnColumnNameTruncated(foundColumn.columnOrNull->name);
+                                }
                             }
                         }
+                        this->keyBuf.reset();
+                    } else {
+                        // We've hit our row limit. We still parse the rest of
+                        // the file, to find errors and count the number of
+                        // rows we missed. But we no longer record any data.
+                        // (this->column == nullptr, so the record's values
+                        // won't be stored anywhere.
                     }
-                    this->keyBuf.reset();
                 } else {
                     if (this->column) {
                         // We're serializing a nested value. Write '"key":'
@@ -589,7 +597,13 @@ static ReadJsonResult readJson(const char* jsonFilename) {
         std::_Exit(1);
     }
 
-    std::shared_ptr<arrow::Table> table(handler.tableBuilder.finish(handler.warnings));
+    int64_t nRows = handler.row;
+    if (nRows > FLAGS_max_rows) {
+        handler.warnings.warnRowsSkipped(nRows - FLAGS_max_rows);
+        nRows = FLAGS_max_rows;
+    }
+
+    std::shared_ptr<arrow::Table> table(handler.tableBuilder.finish(nRows, handler.warnings));
     return ReadJsonResult { handler.warnings, table };
 }
 

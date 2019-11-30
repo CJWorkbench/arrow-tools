@@ -54,7 +54,7 @@ FROM cpp-builddeps AS cpp-build
 
 RUN mkdir -p /app/src
 COPY vendor/ /app/vendor/
-RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/json-warnings.cc /app/src/common.cc
+RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/json-warnings.cc /app/src/json-table-builder.cc /app/src/common.cc
 WORKDIR /app
 COPY CMakeLists.txt /app
 RUN cmake -DCMAKE_BUILD_TYPE=Debug .
