@@ -34,7 +34,7 @@ RUN true \
       && curl -Oapache-arrow-0.15.1.tar.gz --location http://archive.apache.org/dist/arrow/arrow-0.15.1/apache-arrow-0.15.1.tar.gz \
       && tar zxf apache-arrow-0.15.1.tar.gz \
       && cd apache-arrow-0.15.1/cpp \
-      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Debug . \
+      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release . \
       && make -j4 arrow \
       && make install
 
@@ -57,7 +57,7 @@ COPY vendor/ /app/vendor/
 RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/json-warnings.cc /app/src/json-table-builder.cc /app/src/common.cc
 WORKDIR /app
 COPY CMakeLists.txt /app
-RUN cmake -DCMAKE_BUILD_TYPE=Debug .
+RUN cmake -DCMAKE_BUILD_TYPE=Release .
 
 COPY src/ /app/src/
 RUN make -j4
