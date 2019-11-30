@@ -468,3 +468,13 @@ def test_convert_float_to_string_and_report():
         result, pyarrow.table({"x": ["11529215046061312413846977.123", "s", "-2.2"]})
     )
     assert stdout == b"interpreted 2 Numbers as String; see row 0 column x\n"
+
+
+def test_stop_after_byte_total_limit():
+    result, stdout = do_convert_data(
+        '[{"x": "abcd", "y": "efgh"}, {"x": "ijkl", "y": "mnop"}]',
+        max_bytes_total=8,
+        include_stdout=True,
+    )
+    assert_table_equals(result, pyarrow.table({"x": ["abcd"], "y": ["efgh"]}))
+    assert stdout == b"stopped at limit of 8 bytes of data\n"

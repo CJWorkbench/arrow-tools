@@ -45,6 +45,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
 
     State state;
     size_t row;
+    uint64_t nBytesTotal;
     StringBuffer keyBuf;
     StringBuffer valueBuf;
     StringBuffer errorBuf;
@@ -85,6 +86,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
     JsonHandler()
         : state(START),
           row(0),
+          nBytesTotal(0),
           keyBuf(FLAGS_max_bytes_per_column_name),
           valueBuf(FLAGS_max_bytes_per_value),
           errorBuf(FLAGS_max_bytes_per_error_value),
@@ -128,11 +130,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
                         this->appendCommaAndExpectFutureCommaIfWeAreSerializing(this->valueBuf);
                         this->valueBuf.append("null", 4);
                     } else {
-                        // We don't need to write any data to the column. But
-                        // we extend its length, so that if we can warn about a
-                        // dup in a record like {"x": null, "x": null}.
-                        this->column->growToLength(this->row + 1);
-                        this->column = nullptr;
+                        this->finishColumnWithNull();
                     }
                 }
                 break;
@@ -172,8 +170,8 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
             case IN_RECORD:
                 if (this->column) {
                     if (this->nestLevel == 0) {
-                        this->column->writeString(this->row, std::string_view(value, len));
-                        this->column = nullptr;
+                        this->valueBuf.append(value, len);
+                        this->finishColumnWithStringValue();
                     } else {
                         this->appendCommaAndExpectFutureCommaIfWeAreSerializing(this->valueBuf);
                         this->valueBuf.append(value, len);
@@ -214,9 +212,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
                     this->appendCommaAndExpectFutureCommaIfWeAreSerializing(this->valueBuf);
                     this->valueBuf.append(str, len); // we know str is valid JSON
                     if (this->nestLevel == 0) {
-                        this->column->writeNumber(this->row, this->valueBuf.toRawStringView());
-                        this->column = nullptr;
-                        this->valueBuf.reset();
+                        this->finishColumnWithNumberValue();
                     }
                 }
                 break;
@@ -261,9 +257,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
                         if (this->valueBuf.hasOverflow()) {
                             this->warnings.warnValueTruncated(this->row, this->column->name);
                         }
-                        this->column->writeString(this->row, this->valueBuf.toUtf8StringView());
-                        this->column = nullptr;
-                        this->valueBuf.reset();
+                        this->finishColumnWithStringValue();
                     }
                 }
                 break;
@@ -427,9 +421,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
                         this->nestWantComma = (this->nestLevel > 0);
 
                         if (this->nestLevel == 0) {
-                            this->column->writeString(this->row, this->valueBuf.toUtf8StringView());
-                            this->column = nullptr;
-                            this->valueBuf.reset();
+                            this->finishColumnWithStringValue();
                         }
                     }
                 }
@@ -534,9 +526,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
                         if (this->valueBuf.hasOverflow()) {
                             this->warnings.warnValueTruncated(this->row, this->column->name);
                         }
-                        this->column->writeString(this->row, this->valueBuf.toUtf8StringView());
-                        this->column = nullptr;
-                        this->valueBuf.reset();
+                        this->finishColumnWithStringValue();
                     }
                 }
                 break;
@@ -546,6 +536,43 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
     }
 
 private:
+    void finishColumnWithStringValue()
+    {
+        std::string_view sv(this->valueBuf.toUtf8StringView());
+        this->nBytesTotal += sv.size();
+        if (this->nBytesTotal > FLAGS_max_bytes_total) {
+            this->warnings.warnStoppedOutOfMemory();
+            this->state = DONE;
+        } else {
+            this->column->writeString(this->row, sv);
+        }
+        this->column = nullptr;
+        this->valueBuf.reset();
+    }
+
+    void finishColumnWithNumberValue()
+    {
+        std::string_view sv(this->valueBuf.toRawStringView()); // JSON guarantees it's ASCII
+        this->nBytesTotal += sv.size();
+        if (this->nBytesTotal > FLAGS_max_bytes_total) {
+            this->warnings.warnStoppedOutOfMemory();
+            this->state = DONE;
+        } else {
+            this->column->writeNumber(this->row, sv);
+        }
+        this->column = nullptr;
+        this->valueBuf.reset();
+    }
+
+    void finishColumnWithNull()
+    {
+        // We don't need to write any data to the column. But
+        // we extend its length, so that if we can warn about a
+        // dup in a record like {"x": null, "x": null}.
+        this->column->growToLength(this->row + 1);
+        this->column = nullptr;
+    }
+
     void appendCommaAndExpectFutureCommaIfWeAreSerializing(StringBuffer& buf)
     {
         if (this->nestLevel > 0) {
