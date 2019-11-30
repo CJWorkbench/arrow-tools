@@ -79,9 +79,9 @@ scope of this tool.
   character).
 * _Repair invalid values_: data after a close-quote is appended to a value.
 * _Repair unclosed quote_: close a quote if the file ends on an unclosed quote.
-* _Warn on stdout_: stdout can produce lines of text matching these patterns:
 * _Garbage in, garbage out_: any valid UTF-8 file will produce valid output.
   Most invalid UTF-8 files will produce invalid output.
+* _Warn on stdout_: stdout can produce lines of text matching these patterns:
 
 ```
 skipped 102312 rows (after row limit of 1000000)
@@ -91,9 +91,111 @@ repaired 321 values (misplaced quotation marks; see row 3 column 5)
 repaired last value (missing quotation mark)
 ```
 
-(Note `skipped 1 columns` is plural. The intent is for callers to parse using
+Note `skipped 1 columns` is plural. The intent is for callers to parse using
 regular expressions, so the `s` is not optional. Also, messages formats won't
 change without a major-version bump.
+
+
+json-to-arrow
+-------------
+
+*Purpose*: convert a JSON Array-of-records file to Arrow format, predictably
+and RAM-safely.
+
+*Usage*:
+
+```
+json-to-arrow input.json output.arrow \
+    --max-columns=1000 \
+    --max-rows=1000000 \
+    --max-bytes-per-value=32768 \
+    --max-bytes-total=1073741824 \
+    --max-bytes-per-error-value=100 \
+    --max-bytes-per-column-name=100
+```
+
+`json-to-arrow` assumes valid UTF-8. To prevent errors, validate the input
+file beforehand. (If you're truncating it, ensure you don't truncate a UTF-8
+continuation byte.)
+
+*Features*:
+
+* _Limit table size_: truncate the result if it's too long or wide.
+* _Limit value size_: truncate values if they consume too many bytes.
+* _No character-set conversion_: assume UTF-8 input.
+* _Variable row lengths_: allow any new row to add new columns (back-filling
+  `null` for prior rows).
+* _Automatic types_: each column starts null. It will grow to int8, int16,
+  int32, int64, float64 when it encounters numbers. It will switch to String
+  when we see a String. (When parsing numbers, we store the raw JSON text so
+  the String conversion is lossless.)
+* _JSON-serialize Object/Array values_. No nested lists or structs, thanks.
+* _Warn on lossy Numbers_: when we encounter an int64 in a float column, warn
+  if converting int64 to float64 is lossy.
+* _Sensible column names_: column names must be non-empty and cannot contain
+  ASCII control characters `0x00-0x1f`.
+* _Auto-find Array of records_. If the file is an Array, great! Otherwise, if
+  the file is an Object, scan its values until we find an Array. This is fast
+  and predictable; it should work for most API servers.
+* _Skip non-records_: Continue (and warn) if a record is not an Object.
+* _Garbage in, garbage out_: any valid UTF-8 file will produce valid output.
+  Most invalid UTF-8 files will produce invalid output.
+* _Warn on stdout_: stdout can produce lines of text matching these patterns:
+
+```
+JSON parse error at byte %d: %s [see rapidjson/error/en.h for all strings]
+JSON is not an Array or Object containing an Array; got: %s [JSON-encoded document]
+skipped %d rows (after row limit of %d) [--max-rows]
+stopped at limit of %d bytes of data [--max-bytes-total]
+skipped %d non-Object records; example Array item %d: %s [JSON-encoded value]
+skipped column %s%s (after column limit of %d) [--max-columns; second %s is either "and more" or ""]
+chose string type for null column %s%s [second %s is either "and more" or ""]
+truncated %d column names; example %s [--max-bytes-per-column-name]
+ignored invalid column %s%s [second %s is either "and more" or ""]
+ignored duplicate column %s%s starting at row %d [second %s is either "and more" or ""]
+truncated %d values (value byte limit is %d; see row %d column %s) [--max-bytes-per-value]
+lost precision converting %d int64 Numbers to float64; see row %d column %s
+replaced infinity with null for %d Numbers; see row %d column %s
+interpreted %d Numbers as String; see row %d column %s
+```
+
+The intent is for callers to parse using regular expressions. Messages won't
+change without a major-version bump. Neither JSON-encoded values nor column
+names can contain newlines, so each message is guaranteed to fit one line.
+
+(Why use `and more` instead of counting? Because to count columns we'd need
+to store column names we aren't using -- disrespecting the RAM limit implied
+by `--max-columns`.)
+
+*Memory considerations*: while parsing, all data is stored in RAM. To limit RAM
+usage, there are lots of dials to tune! But the principles are simple.
+
+Basically, RAM usage boils down to: *cost per table cell*, *cost per value*
+and *overhead*.
+
+* Each table cell costs *8 to 16 bytes*. We store all values (even nulls) in a
+  String array (costing 8 bytes). If it's a Number, we also store it in a
+  Number array (costing 1-8 bytes for int8-int64, or 8 bytes for float64). So
+  in the worst case, allocate `--max-rows` times `--max-columns` times `16`
+  bytes.
+* Each non-null value costs *its UTF-8 String representation*. For instance,
+  `true` costs 4 bytes; `1231.4231` costs 9 bytes; `"abc"` costs 3 bytes. This
+  costs `--max-bytes-total` at most.
+* When we append to a full buffer, we double its capacity. (This is standard
+  practice.) So in the absolute worst case, *overhead may double all costs*.
+* Finally, remember to tune little odds and ends:
+    * `--max-columns` and `--max-bytes-per-column-name` aren't included in
+      the above calculations. Keep both small so you can ignore them.
+    * `--max-bytes-per-column-name`, `--max-bytes-per-error-value` and
+      `--max-bytes-per-column-name` are fixed-size buffers, allocated when
+      the program starts. Keep them small.
+    * (*BUG*: presently, rapidjson may allocate more RAM than this, because it
+      doesn't use fixed-size buffers. For example, a single-string JSON file
+      can cost the entire file size in RAM just to parse the string. Sorry.)
+
+You should be able to tune these parameters to handle any real-world JSON file.
+You probably can't avoid degenerate cases (such as a malicious attacker); so
+plan for out-of-memory when you invoke this program.
 
 
 Developing
