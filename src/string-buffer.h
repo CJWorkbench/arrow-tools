@@ -17,10 +17,12 @@ struct StringBuffer {
     StringBuffer(size_type maxLength) : bytes(maxLength), pos(0) {}
 
     void append(const uint8_t* s, size_type len) {
+        // append to this->bytes only where there's room
         if (this->pos < this->bytes.size()) {
-            auto end = std::min(this->pos + len, this->bytes.size());
-            std::copy(s, &s[end], &this->bytes[pos]);
+            auto n = std::min(len, this->bytes.size() - pos);
+            std::copy(s, &s[n], &this->bytes[pos]);
         }
+        // always "append" to this->pos
         this->pos += len;
     }
 
