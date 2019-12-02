@@ -214,6 +214,12 @@ def test_empty_values():
     assert_table_equals(result, expected)
 
 
+def test_empty_last_cell_with_no_newline():
+    result = do_convert_dedented_utf8_csv("A,B\na,")
+    expected = pyarrow.table({"0": ["A", "a"], "1": ["B", ""]})
+    assert_table_equals(result, expected)
+
+
 def test_repair_text_after_quotes():
     # quote-and-then-text usually means there's a parsing problem. Users should
     # be notified.

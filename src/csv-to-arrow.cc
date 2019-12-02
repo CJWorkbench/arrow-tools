@@ -279,6 +279,9 @@ VALUE_BEGIN:
   }
   switch (c) {
     case EOF:
+      if (column > 0) {
+        EMIT_VALUE(); // empty string
+      }
       goto END;
     case '\r':
     case '\n':
