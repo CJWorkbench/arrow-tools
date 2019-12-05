@@ -51,3 +51,13 @@ def empty_file(suffix: str = "") -> ContextManager[pathlib.Path]:
     finally:
         with suppress(FileNotFoundError):
             os.unlink(filename)
+
+
+@contextmanager
+def arrow_file(table: pyarrow.Table) -> ContextManager[pathlib.Path]:
+    with empty_file(suffix=".arrow") as path:
+        with path.open("wb") as f:
+            writer = pyarrow.RecordBatchFileWriter(f, table.schema)
+            writer.write(table)
+            writer.close()
+        yield path
