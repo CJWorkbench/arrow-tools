@@ -55,7 +55,7 @@ struct StringBuffer {
 
         // https://tools.ietf.org/html/rfc7159#page-8
         this->append('"');
-        for (auto i = 0; i < len; i++) {
+        for (uint32_t i = 0; i < len; i++) {
             uint8_t c = s[i];
             if (RAPIDJSON_UNLIKELY(escape[c])) {
                 // \n, \f, \r, etc. Might even be \u....

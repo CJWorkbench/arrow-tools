@@ -17,7 +17,7 @@ static bool validate_delimiter(const char* flagname, const std::string& delimite
   if (delimiter.size() == 1) {
     return true;
   }
-  printf("Invalid value for --%s: must be 1 byte in length");
+  printf("Invalid value for --%s: must be 1 byte in length", flagname);
   return false;
 }
 
@@ -215,7 +215,7 @@ static ReadCsvResult readCsv(const char* csvFilename, const char delimiter) {
   size_t column(0);
   std::unique_ptr<uint8_t[]> buf(new uint8_t[FLAGS_max_bytes_per_value]);
   uint8_t* valuePtr = &buf[0];
-  int32_t valuePos(0); // index into buf; int32_t is in arrow/types.h
+  uint32_t valuePos(0); // index into buf; int32_t is in arrow/types.h
   int c;
 
   FILE* file = fopen(csvFilename, "r");
@@ -379,16 +379,16 @@ END:
 static void printWarnings(const Warnings& warnings)
 {
   if (warnings.nRowsSkipped) {
-    printf("skipped %d rows (after row limit of %d)\n", warnings.nRowsSkipped, FLAGS_max_rows);
+    printf("skipped %lu rows (after row limit of %lu)\n", warnings.nRowsSkipped, FLAGS_max_rows);
   }
   if (warnings.nColumnsSkipped) {
-    printf("skipped %d columns (after column limit of %d)\n", warnings.nColumnsSkipped, FLAGS_max_columns);
+    printf("skipped %lu columns (after column limit of %lu)\n", warnings.nColumnsSkipped, FLAGS_max_columns);
   }
   if (warnings.nValuesTruncated) {
-    printf("truncated %d values (value byte limit is %d; see row %d column %d)\n", warnings.nValuesTruncated, FLAGS_max_bytes_per_value, warnings.firstTruncatedValueRow, warnings.firstTruncatedValueColumn);
+    printf("truncated %lu values (value byte limit is %u; see row %lu column %lu)\n", warnings.nValuesTruncated, FLAGS_max_bytes_per_value, warnings.firstTruncatedValueRow, warnings.firstTruncatedValueColumn);
   }
   if (warnings.nValuesRepaired) {
-    printf("repaired %d values (misplaced quotation marks; see row %d column %d)\n", warnings.nValuesRepaired, warnings.firstRepairedValueRow, warnings.firstRepairedValueColumn);
+    printf("repaired %lu values (misplaced quotation marks; see row %lu column %lu)\n", warnings.nValuesRepaired, warnings.firstRepairedValueRow, warnings.firstRepairedValueColumn);
   }
   if (warnings.eofInQuotedValue) {
     printf("repaired last value (missing quotation mark)\n");

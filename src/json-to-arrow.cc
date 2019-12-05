@@ -624,7 +624,7 @@ static ReadJsonResult readJson(const char* jsonFilename) {
         std::_Exit(1);
     }
 
-    int64_t nRows = handler.row;
+    size_t nRows = handler.row;
     if (nRows > FLAGS_max_rows) {
         handler.warnings.warnRowsSkipped(nRows - FLAGS_max_rows);
         nRows = FLAGS_max_rows;

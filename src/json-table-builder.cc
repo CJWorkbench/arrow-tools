@@ -9,7 +9,7 @@
 DECLARE_uint32(max_columns);
 
 static void
-storeStringValue(size_t row, std::string_view str, arrow::StringBuilder& builder)
+storeStringValue(int64_t row, std::string_view str, arrow::StringBuilder& builder)
 {
     // Called no matter what the input
     ASSERT_ARROW_OK(builder.Reserve(row + 1 - builder.length()), "reserving space for Strings");
@@ -25,7 +25,7 @@ storeStringValue(size_t row, std::string_view str, arrow::StringBuilder& builder
 // pass builderLength separately: builder.length() is wrong in Arrow
 // 0.15.1: https://issues.apache.org/jira/browse/ARROW-7281
 static void
-storeIntValue(size_t row, int64_t value, arrow::AdaptiveIntBuilder& builder, int64_t& builderLength)
+storeIntValue(int64_t row, int64_t value, arrow::AdaptiveIntBuilder& builder, int64_t& builderLength)
 {
     if (row > builderLength) {
         ASSERT_ARROW_OK(builder.AppendNulls(row - builderLength), "adding null integers");
@@ -35,7 +35,7 @@ storeIntValue(size_t row, int64_t value, arrow::AdaptiveIntBuilder& builder, int
 }
 
 static void
-storeFloat64Value(size_t row, double value, arrow::DoubleBuilder& builder)
+storeFloat64Value(int64_t row, double value, arrow::DoubleBuilder& builder)
 {
     ASSERT_ARROW_OK(builder.Reserve(row + 1 - builder.length()), "reserving space for Floats");
     if (row > builder.length()) {
@@ -47,7 +47,7 @@ storeFloat64Value(size_t row, double value, arrow::DoubleBuilder& builder)
 
 
 void
-ColumnBuilder::writeString(size_t row, std::string_view str)
+ColumnBuilder::writeString(int64_t row, std::string_view str)
 {
     storeStringValue(row, str, this->stringBuilder);
 
@@ -102,13 +102,13 @@ canParseJsonNumberAsInt64(std::string_view str)
 
 
 void
-ColumnBuilder::writeNumber(size_t row, std::string_view str)
+ColumnBuilder::writeNumber(int64_t row, std::string_view str)
 {
     storeStringValue(row, str, this->stringBuilder);
     this->nNumbers++;
 
     if (canParseJsonNumberAsInt64(str)) {
-        int64_t value;
+        int64_t value = 0; // 0 to avoid uninitialized-value compiler warning
         std::from_chars(str.begin(), str.end(), value); // Guaranteed success
         this->writeInt64(row, value);
     } else {
@@ -138,7 +138,7 @@ ColumnBuilder::writeNumber(size_t row, std::string_view str)
 
 
 void
-ColumnBuilder::writeInt64(size_t row, int64_t value)
+ColumnBuilder::writeInt64(int64_t row, int64_t value)
 {
     switch (this->dtype) {
         case UNTYPED:
@@ -202,7 +202,7 @@ ColumnBuilder::convertIntToFloat64()
 
 
 void
-ColumnBuilder::writeFloat64(size_t row, double value)
+ColumnBuilder::writeFloat64(int64_t row, double value)
 {
     switch (this->dtype) {
         case UNTYPED:
@@ -272,7 +272,7 @@ isColumnNameInvalid(std::string_view name)
 
 
 ColumnBuilder*
-TableBuilder::createColumnOrNull(size_t row, std::string_view name, Warnings& warnings)
+TableBuilder::createColumnOrNull(int64_t row, std::string_view name, Warnings& warnings)
 {
     if (isColumnNameInvalid(name)) {
         warnings.warnColumnNameInvalid(row, name);

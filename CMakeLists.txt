@@ -10,7 +10,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake_modules")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # We require AVX2 extensions
-add_compile_options(-march=haswell)# -Wall -Werror)
+add_compile_options(-march=haswell -Wall -Werror)
 
 # Look for installed packages the system
 pkg_search_module(ARROW REQUIRED arrow)

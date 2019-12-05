@@ -34,10 +34,10 @@ struct ColumnBuilder {
     std::unique_ptr<arrow::AdaptiveIntBuilder> intBuilder;
     int64_t intBuilderLength; // intBuilder->length() is wrong in Arrow 0.15.1: https://issues.apache.org/jira/browse/ARROW-7281
     std::unique_ptr<arrow::DoubleBuilder> doubleBuilder;
-    size_t firstNumberRow;
     size_t nNumbers;
-    size_t firstLossyNumberRow;
+    size_t firstNumberRow;
     size_t nLossyNumbers;
+    size_t firstLossyNumberRow;
     size_t nOverflowNumbers;
     size_t firstOverflowNumberRow;
     double_conversion::StringToDoubleConverter doubleConverter;
@@ -51,22 +51,24 @@ struct ColumnBuilder {
     Dtype dtype;
 
     ColumnBuilder(const std::string& name_)
-        : stringBuilder(arrow::default_memory_pool()),
-          name(name_),
+        : name(name_),
+          stringBuilder(arrow::default_memory_pool()),
           intBuilderLength(0),
           nNumbers(0),
           firstNumberRow(0),
           nLossyNumbers(0),
           firstLossyNumberRow(0),
-          dtype(UNTYPED),
-          doubleConverter(0, 0, 0, nullptr, nullptr)
+          nOverflowNumbers(0),
+          firstOverflowNumberRow(0),
+          doubleConverter(0, 0, 0, nullptr, nullptr),
+          dtype(UNTYPED)
     {
     }
 
-    void writeString(size_t row, std::string_view str);
-    void writeNumber(size_t row, std::string_view str);
+    void writeString(int64_t row, std::string_view str);
+    void writeNumber(int64_t row, std::string_view str);
 
-    int64_t length() const {
+    size_t length() const {
         return this->stringBuilder.length();
     }
 
@@ -102,11 +104,11 @@ struct ColumnBuilder {
     }
 
 private:
-    void writeInt64(size_t row, int64_t value);
-    void writeFloat64(size_t row, double value);
+    void writeInt64(int64_t row, int64_t value);
+    void writeFloat64(int64_t row, double value);
     void convertIntToFloat64();
 
-    double convertIntValueToFloatAndMaybeWarn(size_t row, int64_t intValue)
+    double convertIntValueToFloatAndMaybeWarn(int64_t row, int64_t intValue)
     {
         double floatValue = static_cast<double>(intValue);
         if (static_cast<int64_t>(floatValue) != intValue) {
@@ -127,7 +129,7 @@ public:
         bool isNew;
     };
 
-    FoundColumnOrNull findOrCreateColumnOrNull(size_t row, std::string_view name, Warnings& warnings) {
+    FoundColumnOrNull findOrCreateColumnOrNull(int64_t row, std::string_view name, Warnings& warnings) {
         auto iter = this->lookup.find(name);
         if (iter == this->lookup.end()) {
             // not found
@@ -152,7 +154,7 @@ private:
     std::vector<std::unique_ptr<ColumnBuilder>> columnBuilders;
     std::unordered_map<std::string_view, ColumnBuilder*> lookup;
 
-    ColumnBuilder* createColumnOrNull(size_t row, std::string_view name, Warnings& warnings);
+    ColumnBuilder* createColumnOrNull(int64_t row, std::string_view name, Warnings& warnings);
 };
 
 #endif  // ARROW_TOOLS_JSON_TABLE_BUILDER_H_

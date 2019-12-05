@@ -29,7 +29,7 @@ struct Warnings
 
     // We ignored some records that weren't records.
     size_t nRowsInvalid;
-    size_t firstRowInvalidIndex; // 0-based
+    int64_t firstRowInvalidIndex; // 0-based
     std::string firstRowInvalid; // JSON-encoded representation
 
     // ------------------------------------------
@@ -53,13 +53,13 @@ struct Warnings
 
     // We nixed column names that we cannot use (e.g., name="")
     size_t nColumnNamesInvalid; // 0, 1 or 2 -- we can't count them all
-    size_t firstColumnNameInvalidRow; // 0-base
+    int64_t firstColumnNameInvalidRow; // 0-base
     std::string firstColumnNameInvalid;
 
     // We nixed some data because its column name was repeated.
     // e.g., the record {"x": 1, "x": 2} -- we will store 1, nix 2
     size_t nColumnNamesDuplicated; // 0, 1 or 2 -- we don't bother counting
-    size_t firstColumnNameDuplicatedRow; // 0-base
+    int64_t firstColumnNameDuplicatedRow; // 0-base
     std::string firstColumnNameDuplicated;
 
     // ------------------------------------
@@ -68,22 +68,22 @@ struct Warnings
     // We truncated values (strings or nested-object serializations, almost
     // certainly) because they exceed our value limit
     size_t nValuesTruncated; // truncated because the individual value is too big
-    size_t firstValueTruncatedRow; // 0-base
+    int64_t firstValueTruncatedRow; // 0-base
     std::string firstValueTruncatedColumn;
 
     // We converted int64=>float64 and lost data
     size_t nValuesLossyIntToFloat;
-    size_t firstValueLossyIntToFloatRow; // 0-base
+    int64_t firstValueLossyIntToFloatRow; // 0-base
     std::string firstValueLossyIntToFloatColumn;
 
     // We replaced Infinity with null and lost data
     size_t nValuesOverflowFloat;
-    size_t firstValueOverflowFloatRow; // 0-base
+    int64_t firstValueOverflowFloatRow; // 0-base
     std::string firstValueOverflowFloatColumn;
 
     // We converted Number=>Text (users might not expect this)
     size_t nValuesNumberToText;
-    size_t firstValueNumberToTextRow; // 0-base
+    int64_t firstValueNumberToTextRow; // 0-base
     std::string firstValueNumberToTextColumn;
 
     Warnings()
@@ -129,7 +129,7 @@ struct Warnings
         this->stoppedOutOfMemory = true;
     }
 
-    void warnRowInvalid(size_t row, const StringBuffer& json) {
+    void warnRowInvalid(int64_t row, const StringBuffer& json) {
         if (this->nRowsInvalid == 0) {
             this->firstRowInvalidIndex = row;
             this->firstRowInvalid = json.copyUtf8String();
@@ -162,7 +162,7 @@ struct Warnings
         this->nColumnNamesTruncated++;
     }
 
-    void warnColumnNameInvalid(size_t row, std::string_view name) {
+    void warnColumnNameInvalid(int64_t row, std::string_view name) {
         // We don't remember invalid column names; so this can be called many times with the same name
         if (this->nColumnNamesInvalid == 0) {
             this->nColumnNamesInvalid = 1;
@@ -173,7 +173,7 @@ struct Warnings
         }
     }
 
-    void warnColumnNameDuplicated(size_t row, const StringBuffer& keyBuf) {
+    void warnColumnNameDuplicated(int64_t row, const StringBuffer& keyBuf) {
         // This can be called many times with the same name -- and even the same name+row
         if (this->nColumnNamesDuplicated == 0) {
             this->nColumnNamesDuplicated = 1;
@@ -184,7 +184,7 @@ struct Warnings
         }
     }
 
-    void warnValueTruncated(size_t row, const std::string& column) {
+    void warnValueTruncated(int64_t row, const std::string& column) {
         if (this->nValuesTruncated == 0) {
             this->firstValueTruncatedRow = row;
             this->firstValueTruncatedColumn = column;
@@ -192,7 +192,7 @@ struct Warnings
         this->nValuesTruncated++;
     }
 
-    void warnValuesLossyIntToFloat(size_t nValues, size_t row, const std::string& column) {
+    void warnValuesLossyIntToFloat(size_t nValues, int64_t row, const std::string& column) {
         if (this->nValuesLossyIntToFloat == 0) {
             this->firstValueLossyIntToFloatRow = row;
             this->firstValueLossyIntToFloatColumn = column;
@@ -200,7 +200,7 @@ struct Warnings
         this->nValuesLossyIntToFloat += nValues;
     }
 
-    void warnValuesOverflowFloat(size_t nValues, size_t row, const std::string& column) {
+    void warnValuesOverflowFloat(size_t nValues, int64_t row, const std::string& column) {
         if (this->nValuesOverflowFloat == 0) {
             this->firstValueOverflowFloatRow = row;
             this->firstValueOverflowFloatColumn = column;
@@ -208,7 +208,7 @@ struct Warnings
         this->nValuesOverflowFloat += nValues;
     }
 
-    void warnValuesNumberToText(size_t nValues, size_t row, const std::string& column) {
+    void warnValuesNumberToText(size_t nValues, int64_t row, const std::string& column) {
         if (this->nValuesNumberToText == 0) {
             this->firstValueNumberToTextRow = row;
             this->firstValueNumberToTextColumn = column;
