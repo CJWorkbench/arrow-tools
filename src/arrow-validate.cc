@@ -1,3 +1,4 @@
+#include <cmath>
 #include <memory>
 #include <string>
 
@@ -159,6 +160,37 @@ checkDictionaryValuesUnique(const std::shared_ptr<arrow::Array> dictionary)
 
 
 struct ValidateVisitor {
+  template<typename ArrayType>
+  arrow::Status visitFloatArray(const ArrayType& array)
+  {
+    if (FLAGS_check_floats_all_finite) {
+      int64_t length = array.length();
+      for (int64_t i = 0; i < length; i++) {
+        if (array.IsValid(i)) {
+          if (!std::isfinite(array.Value(i))) {
+            return arrow::Status::Invalid("--check-floats-all-finite");
+          }
+        }
+      }
+    }
+    return arrow::Status::OK();
+  }
+
+  arrow::Status Visit(const arrow::DoubleArray& array)
+  {
+    return this->visitFloatArray(array);
+  }
+
+  arrow::Status Visit(const arrow::FloatArray& array)
+  {
+    return this->visitFloatArray(array);
+  }
+
+  arrow::Status Visit(const arrow::HalfFloatArray& array)
+  {
+    return this->visitFloatArray(array);
+  }
+
   arrow::Status Visit(const arrow::PrimitiveArray& array)
   {
     return arrow::Status::OK();

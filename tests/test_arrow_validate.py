@@ -1,7 +1,9 @@
+import math
 from pathlib import Path
 import struct
 import subprocess
 from typing import Dict, Optional, Tuple
+import numpy as np
 import pyarrow as pa
 from .util import arrow_file
 
@@ -273,12 +275,39 @@ def test_ints():
 def test_floats():
     table = pa.table(
         {
+            "float16": pa.array(
+                [np.float16(1), np.float16(2), np.float16(3)], pa.float16()
+            ),
             "float32": pa.array([1, 2, 3], pa.float32()),
             "float64": pa.array([1, 2, 3], pa.float64()),
         }
     )
     with arrow_file(table) as path:
         assert validate(path, ALL_CHECKS) is None
+
+
+def test_floats_all_finite_null_is_valid():
+    table = pa.table({"A": pa.array([1.0, -2.1, None])})
+    with arrow_file(table) as path:
+        assert validate(path, ALL_CHECKS) is None
+
+
+def test_floats_all_finite_nan_is_invalid():
+    table = pa.table({"A": pa.array([1.0, -2.1, math.nan])})
+    with arrow_file(table) as path:
+        assert validate(path, {"floats-all-finite": True}) == (
+            "--check-floats-all-finite failed on column A\n",
+            "",
+        )
+
+
+def test_floats_all_finite_infinity_is_invalid():
+    table = pa.table({"A": pa.array([1.0, -math.inf])})
+    with arrow_file(table) as path:
+        assert validate(path, {"floats-all-finite": True}) == (
+            "--check-floats-all-finite failed on column A\n",
+            "",
+        )
 
 
 def test_timestamp():
