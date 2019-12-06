@@ -2,6 +2,7 @@
 #include <string>
 
 #include <arrow/api.h>
+#include <arrow/compute/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 #include <arrow/visitor_inline.h>
@@ -14,6 +15,7 @@ DEFINE_bool(check_utf8, true, "Ensure all utf8() and dictionary(..., utf8()) col
 DEFINE_bool(check_offsets_dont_overflow, true, "Ensure all utf8() and dictionary(..., utf8()) offsets don't overflow data buffers");
 DEFINE_bool(check_floats_all_finite, false, "Ensure all float16, float32 and float64 values are finite (not NaN or Infinity)");
 DEFINE_bool(check_dictionary_values_all_used, false, "Ensure there are no spurious dictionary values");
+DEFINE_bool(check_dictionary_values_not_null, false, "Ensure there are no null dictionary values");
 DEFINE_bool(check_dictionary_values_unique, false, "Ensure there are no duplicate dictionary values");
 DEFINE_bool(check_column_name_control_characters, false, "Ensure no column name includes ASCII control characters");
 DEFINE_uint32(check_column_name_max_bytes, 0, "Enforce a maximum column-name length");
@@ -63,6 +65,99 @@ checkUtf8(const arrow::StringArray& array)
 static arrow::Status validateArray(const arrow::Array& array);
 
 
+struct CheckDictionaryValuesAllUsedVisitor {
+  const arrow::Array* dictionary;
+  bool valid;
+
+  CheckDictionaryValuesAllUsedVisitor(const arrow::Array* dictionary) : dictionary(dictionary), valid(false) {}
+
+  template<typename ArrayType>
+  bool check(const ArrayType& indices) {
+    if (indices.null_count() == indices.length()) {
+      // all-null indices? Then length of non-null data must be 0
+      return this->dictionary->length() == 0;
+    }
+
+    using value_type = typename ArrayType::value_type;
+
+    // 1. Find max
+    value_type max = 0;
+    int64_t length = indices.length();
+    for (int64_t i = 0; i < length; i++) {
+      if (indices.IsValid(i)) {
+        value_type value = indices.Value(i);
+        if (value > max) {
+          max = value;
+        }
+      }
+    }
+
+    // 2. Store all seen values in a set. (The set is of size `max`.)
+    // 0 means "not seen", 1 means "seen"
+    std::unique_ptr<uint8_t[]> seen = std::make_unique<uint8_t[]>(max + 1);
+    for (int64_t i = 0; i < length; i++) {
+      if (indices.IsValid(i)) {
+        seen[indices.Value(i)] = 1;
+      }
+    }
+
+    // 3. Check if there's an unseen value.
+    for (int64_t i = 0; i < max; i++) {
+      if (seen[i] == 0) {
+        return false;
+      }
+    }
+
+    // We've seen all value
+    return true;
+  }
+
+  arrow::Status Visit(const arrow::Int8Array& array) {
+    this->valid = this->check(array);
+    return arrow::Status::OK();
+  }
+
+  arrow::Status Visit(const arrow::Int16Array& array) {
+    this->valid = this->check(array);
+    return arrow::Status::OK();
+  }
+
+  arrow::Status Visit(const arrow::Int32Array& array) {
+    this->valid = this->check(array);
+    return arrow::Status::OK();
+  }
+
+  // fallback
+  arrow::Status Visit(const arrow::Array& array) {
+    return arrow::Status::NotImplemented("Dictionary indices must be uint8/uint16/uint32");
+  }
+};
+
+
+static bool
+checkDictionaryValuesNotNull(const arrow::Array& array) {
+  return array.null_count() == 0;
+}
+
+
+static bool
+checkDictionaryValuesAllUsed(const arrow::Array& indices, const arrow::Array& dictionary) {
+  CheckDictionaryValuesAllUsedVisitor visitor(&dictionary);
+  ASSERT_ARROW_OK(arrow::VisitArrayInline(indices, &visitor), "checking all dictionary values are used");
+  return visitor.valid;
+}
+
+
+static bool
+checkDictionaryValuesUnique(const std::shared_ptr<arrow::Array> dictionary)
+{
+  std::shared_ptr<arrow::Array> uniques;
+  arrow::compute::FunctionContext ctx(arrow::default_memory_pool());
+  ASSERT_ARROW_OK(arrow::compute::Unique(&ctx, dictionary, &uniques), "checking dictionary is unique");
+  return uniques->length() == dictionary->length();
+}
+
+
 struct ValidateVisitor {
   arrow::Status Visit(const arrow::PrimitiveArray& array)
   {
@@ -88,7 +183,29 @@ struct ValidateVisitor {
   {
     arrow::Status status = validateArray(*array.indices());
     if (!status.ok()) return status;
-    return validateArray(*array.dictionary());
+
+    status = validateArray(*array.dictionary());
+    if (!status.ok()) return status;
+
+    if (FLAGS_check_dictionary_values_not_null) {
+      if (!checkDictionaryValuesNotNull(*array.dictionary())) {
+        return arrow::Status::Invalid("--check-dictionary-values-not-null");
+      }
+    }
+
+    if (FLAGS_check_dictionary_values_all_used) {
+      if (!checkDictionaryValuesAllUsed(*array.indices(), *array.dictionary())) {
+        return arrow::Status::Invalid("--check-dictionary-values-all-used");
+      }
+    }
+
+    if (FLAGS_check_dictionary_values_unique) {
+      if (!checkDictionaryValuesUnique(array.dictionary())) {
+        return arrow::Status::Invalid("--check-dictionary-values-unique");
+      }
+    }
+
+    return status;
   }
 
   // fallback

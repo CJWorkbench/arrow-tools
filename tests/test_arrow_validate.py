@@ -3,7 +3,19 @@ import struct
 import subprocess
 from typing import Dict, Optional, Tuple
 import pyarrow as pa
-from .util import arrow_file, empty_file
+from .util import arrow_file
+
+
+ALL_CHECKS = {
+    "utf8": True,
+    "offsets-dont-overflow": True,
+    "floats-all-finite": True,
+    "dictionary-values-all-used": True,
+    "dictionary-values-not-null": True,
+    "dictionary-values-unique": True,
+    "column-name-control-characters": True,
+    "column-name-max-bytes": 100,
+}
 
 
 def validate(
@@ -122,19 +134,127 @@ def test_check_column_name_max_length():
         )
 
 
+def test_dictionary_values_all_used_valid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([0, 2, 1], pa.int32()), pa.array(["A", "B", "C"])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, ALL_CHECKS) is None
+
+
+def test_dictionary_values_all_used_invalid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([0, 2, 2], pa.int32()), pa.array(["A", "B", "C"])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, {"dictionary-values-all-used": True}) == (
+            "--check-dictionary-values-all-used failed on column A\n",
+            "",
+        )
+
+
+def test_dictionary_values_all_used_all_null_indices_valid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([None, None, None], pa.int32()), pa.array([], pa.utf8())
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, ALL_CHECKS) is None
+
+
+def test_dictionary_values_all_used_all_null_indices_invalid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([None, None, None], pa.int32()), pa.array(["A"])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, {"dictionary-values-all-used": True}) == (
+            "--check-dictionary-values-all-used failed on column A\n",
+            "",
+        )
+
+
+def test_dictionary_values_not_null_valid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([0, 1], pa.int32()), pa.array(["A", "B"])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, ALL_CHECKS) is None
+
+
+def test_dictionary_values_not_null_invalid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([0, 1], pa.int32()), pa.array(["A", "B", None])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, {"dictionary-values-not-null": True}) == (
+            "--check-dictionary-values-not-null failed on column A\n",
+            "",
+        )
+
+
+def test_dictionary_values_unique_valid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([0, 1, 2], pa.int32()), pa.array(["A", "B", "C"])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, ALL_CHECKS) is None
+
+
+def test_dictionary_values_unique_invalid():
+    table = pa.table(
+        {
+            "A": pa.DictionaryArray.from_arrays(
+                pa.array([0, 1, 2], pa.int32()), pa.array(["A", "B", "A"])
+            )
+        }
+    )
+    with arrow_file(table) as path:
+        assert validate(path, {"dictionary-values-unique": True}) == (
+            "--check-dictionary-values-unique failed on column A\n",
+            "",
+        )
+
+
 def test_check_empty_data_string_array():
     with arrow_file(pa.table({"A": ["", "", ""]})) as path:
-        assert validate(path, {"utf8": True, "offsets-dont-overflow": True}) is None
+        assert validate(path, ALL_CHECKS) is None
 
 
 def test_check_null_data_string_array():
     with arrow_file(pa.table({"A": pa.array([None, None], pa.utf8())})) as path:
-        assert validate(path, {"utf8": True, "offsets-dont-overflow": True}) is None
+        assert validate(path, ALL_CHECKS) is None
 
 
 def test_check_zero_length_string_array():
     with arrow_file(pa.table({"A": pa.array([], pa.utf8())})) as path:
-        assert validate(path, {"utf8": True, "offsets-dont-overflow": True}) is None
+        assert validate(path, ALL_CHECKS) is None
 
 
 def test_ints():
@@ -147,7 +267,7 @@ def test_ints():
         }
     )
     with arrow_file(table) as path:
-        assert validate(path) is None
+        assert validate(path, ALL_CHECKS) is None
 
 
 def test_floats():
@@ -158,10 +278,10 @@ def test_floats():
         }
     )
     with arrow_file(table) as path:
-        assert validate(path) is None
+        assert validate(path, ALL_CHECKS) is None
 
 
 def test_timestamp():
     table = pa.table({"date64": pa.array([1231241234, 235234234], pa.timestamp("s"))})
     with arrow_file(table) as path:
-        assert validate(path) is None
+        assert validate(path, ALL_CHECKS) is None
