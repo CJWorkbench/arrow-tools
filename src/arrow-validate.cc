@@ -267,7 +267,7 @@ validateColumnName(const std::string& name)
   }
 
   if (FLAGS_check_column_name_control_characters) {
-    for (const char c : name) {
+    for (const uint8_t c : name) {
       if (c < 0x20) {
         std::cout << "--check-column-name-control-characters failed on a column name" << std::endl;
         return false;

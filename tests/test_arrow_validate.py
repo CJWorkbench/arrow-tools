@@ -118,7 +118,13 @@ def test_check_utf8_invalid_column_name():
         )
 
 
-def test_check_column_name_control_characters():
+def test_check_column_name_control_characters_valid():
+    table = pa.table({"ééé": [1, 2]})
+    with arrow_file(table) as path:
+        assert validate(path, {"column-name-control-characters": True}) is None
+
+
+def test_check_column_name_control_characters_invalid():
     table = pa.table({"a\nb": [1, 2]})
     with arrow_file(table) as path:
         assert validate(path, {"column-name-control-characters": True}) == (
