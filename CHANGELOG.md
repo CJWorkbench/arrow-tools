@@ -1,3 +1,8 @@
+v0.0.5 - 2019-12-06
+-------------------
+
+* `arrow-validate --check-column-name-control-characters`: allow non-ASCII
+
 v0.0.4 - 2019-12-05
 -------------------
 
