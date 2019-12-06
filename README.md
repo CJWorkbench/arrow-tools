@@ -46,13 +46,41 @@ arrow-validate input.arrow \
 ```
 
 `arrow-validate` implements checks that should arguably be included in Arrow
-itself.
+itself. It returns exit code 0 if validation passes, or 1 if validation fails.
 
 The two most-obvious checks are UTF-8 validation and buffer-overflow detection.
 These code paths are highly optimized, and you should use them liberally.
 
 The other checks are opinionated. They help callers make assumptions about
 the Arrow file.
+
+*Features*:
+
+* `--check-utf8`: validate UTF-8 in column names, utf8 columns and dictionaries.
+* `--check-offsets-dont-overflow`: ensure offsets don't cause buffer overflow.
+* `--check-floats-all-finite`: disallow NaN, -Infinity and Infinity.
+* `--check-dictionary-values-all-used`: disallow unused dictionary values.
+* `--check-dictionary-values-not-null`: disallow nulls in dictionaries.
+* `--check-dictionary-values-unique`: disallow duplicate dictionary values.
+* `--check-column-name-control-characters`: disallow ASCII characters
+  `\x00` to `\x1f` in column names.
+* `--check-column-name-max-bytes=[int]`: disallow too-long column names.
+* _Warn on stdout_ as soon as any check fails. The error is on one line,
+  newline-terminated. It looks like:
+
+```
+--check-dictionary-values-unique failed on column My Column
+```
+
+Two potential errors follow a slightly different pattern: they omit invalid
+column names, so output is valid UTF-8:
+
+```
+--check-column-name-control-characters failed on a column name
+--check-utf8 failed on a column name
+```
+
+Error-message patterns are guaranteed not to change between major versions.
 
 csv-to-arrow
 ------------

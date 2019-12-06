@@ -1,3 +1,9 @@
+v0.0.4 - 2019-12-05
+-------------------
+
+* `arrow-validate`: emit a parseable description when an Arrow file does not
+  meet expectations.
+
 v0.0.3 - 2019-12-02
 -------------------
 
