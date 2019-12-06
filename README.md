@@ -26,6 +26,34 @@ to these binaries.
 Binaries
 ========
 
+arrow-validate
+--------------
+
+*Purpose*: check in O(n) time that an Arrow-format file meets assumptions.
+
+*Usage*:
+
+```
+arrow-validate input.arrow \
+    --check-utf8 \
+    --check-offsets-dont-overflow \
+    --check-floats-all-finite \
+    --check-dictionary-values-all-used \
+    --check-dictionary-values-not-null \
+    --check-dictionary-values-unique \
+    --check-column-name-control-characters \
+    --check-column-name-max-bytes=100
+```
+
+`arrow-validate` implements checks that should arguably be included in Arrow
+itself.
+
+The two most-obvious checks are UTF-8 validation and buffer-overflow detection.
+These code paths are highly optimized, and you should use them liberally.
+
+The other checks are opinionated. They help callers make assumptions about
+the Arrow file.
+
 csv-to-arrow
 ------------
 
