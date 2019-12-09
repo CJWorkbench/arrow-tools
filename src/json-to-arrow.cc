@@ -45,6 +45,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
 
     State state;
     size_t row;
+    bool isRowPartiallyWritten;
     uint64_t nBytesTotal;
     StringBuffer keyBuf;
     StringBuffer valueBuf;
@@ -86,6 +87,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
     JsonHandler()
         : state(START),
           row(0),
+          isRowPartiallyWritten(false),
           nBytesTotal(0),
           keyBuf(FLAGS_max_bytes_per_column_name),
           valueBuf(FLAGS_max_bytes_per_value),
@@ -411,6 +413,7 @@ struct JsonHandler : rapidjson::BaseReaderHandler<rapidjson::UTF8<uint8_t>> {
                 if (this->nestLevel == 0) {
                     // End of record. Now we expect a new record.
                     this->row++;
+                    this->isRowPartiallyWritten = false;
                     this->state = IN_RECORD_ARRAY;
                 } else {
                     // We're in a nested object inside a column
@@ -545,6 +548,7 @@ private:
             this->state = DONE;
         } else {
             this->column->writeString(this->row, sv);
+            this->isRowPartiallyWritten = true;
         }
         this->column = nullptr;
         this->valueBuf.reset();
@@ -559,6 +563,7 @@ private:
             this->state = DONE;
         } else {
             this->column->writeNumber(this->row, sv);
+            this->isRowPartiallyWritten = true;
         }
         this->column = nullptr;
         this->valueBuf.reset();
@@ -571,6 +576,7 @@ private:
         // dup in a record like {"x": null, "x": null}.
         this->column->growToLength(this->row + 1);
         this->column = nullptr;
+        this->isRowPartiallyWritten = true;
     }
 
     void appendCommaAndExpectFutureCommaIfWeAreSerializing(StringBuffer& buf)
@@ -630,7 +636,10 @@ static ReadJsonResult readJson(const char* jsonFilename) {
         nRows = FLAGS_max_rows;
     }
 
-    std::shared_ptr<arrow::Table> table(handler.tableBuilder.finish(nRows, handler.warnings));
+    std::shared_ptr<arrow::Table> table(handler.tableBuilder.finish(
+          nRows + (handler.isRowPartiallyWritten ? 1 : 0),
+          handler.warnings
+    ));
     return ReadJsonResult { handler.warnings, table };
 }
 

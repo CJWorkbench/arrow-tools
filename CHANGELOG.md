@@ -1,3 +1,8 @@
+v0.0.6 - 2019-12-09
+-------------------
+
+* `json-to-arrow`: avoid segfault in some --max-bytes-total cases.
+
 v0.0.5 - 2019-12-06
 -------------------
 
