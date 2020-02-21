@@ -478,3 +478,36 @@ def test_stop_after_byte_total_limit():
     )
     assert_table_equals(result, pyarrow.table({"x": ["abcd"], "y": ["efgh"]}))
     assert stdout == b"stopped at limit of 8 bytes of data\n"
+
+
+def test_stop_after_byte_total_limit_on_first_row_first_value():
+    result, stdout = do_convert_data(
+        '[{"x": "abcdefghijklmnop"}]', max_bytes_total=8, include_stdout=True
+    )
+    assert_table_equals(result, pyarrow.table({"x": pyarrow.array([], pyarrow.utf8())}))
+    assert stdout == (
+        b"stopped at limit of 8 bytes of data\n"
+        b"chose string type for null column x\n"
+    )
+
+
+def test_stop_after_byte_total_add_null_to_make_column_lengths_even():
+    result, stdout = do_convert_data(
+        '[{"x": 1.1, "y": 1, "z": "bcdefghijklmnop"}]',
+        max_bytes_total=8,
+        include_stdout=True,
+    )
+    assert_table_equals(
+        result,
+        pyarrow.table(
+            {
+                "x": pyarrow.array([1.1], pyarrow.float64()),
+                "y": pyarrow.array([1], pyarrow.int8()),
+                "z": pyarrow.array([None], pyarrow.utf8()),
+            }
+        ),
+    )
+    assert stdout == (
+        b"stopped at limit of 8 bytes of data\n"
+        b"chose string type for null column z\n"
+    )

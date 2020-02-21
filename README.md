@@ -276,7 +276,18 @@ Deploying
 2. `git commit`
 3. `git tag VERSION` (use semver -- e.g., `v1.2.3`)
 4. `git push --tags && git push`
-5. Wait; Docker Hub will publish the new image
+5. Wait; Docker Hub will publish the new image **SEE NOTE**
+
+**NOTE** Currently, Docker Hub automatic builds don't use AVX2 instructions,
+so the builds fail. For now, the workaround is:
+
+1. `docker build . -t workbenchdata/arrow-tools:VERSION`
+2. `docker push workbenchdata/arrow-tools:VERSION`
+
+Longer-term, several paths would work: A) use AVX, not AVX2, and suffer a
+not-yet-measured slowdown; B) switch away from Docker Hub; C) wait for
+Docker Hub to upgrade its machines; D) use runtime CPU feature detection, so
+Docker Hub runs different code than production.
 
 
 License

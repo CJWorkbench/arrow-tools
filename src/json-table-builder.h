@@ -72,7 +72,7 @@ struct ColumnBuilder {
         return this->stringBuilder.length();
     }
 
-    void growToLength(size_t nRows) {
+    void growToLength(int64_t nRows) {
         this->stringBuilder.AppendNulls(nRows - this->stringBuilder.length());
         switch (this->dtype) {
             case UNTYPED:
