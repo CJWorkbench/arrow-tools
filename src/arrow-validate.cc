@@ -320,8 +320,10 @@ validateRecordBatch(arrow::RecordBatch& batch)
 static bool
 validateArrowFile(const std::string& filename)
 {
-  std::shared_ptr<arrow::io::MemoryMappedFile> file;
-  ASSERT_ARROW_OK(arrow::io::MemoryMappedFile::Open(filename, arrow::io::FileMode::READ, &file), "opening Arrow file");
+  std::shared_ptr<arrow::io::MemoryMappedFile> file(ASSERT_ARROW_OK(
+    arrow::io::MemoryMappedFile::Open(filename, arrow::io::FileMode::READ),
+    "opening Arrow file"
+  ));
   std::shared_ptr<arrow::ipc::RecordBatchFileReader> reader;
   ASSERT_ARROW_OK(arrow::ipc::RecordBatchFileReader::Open(file, &reader), "reading Arrow file header");
 

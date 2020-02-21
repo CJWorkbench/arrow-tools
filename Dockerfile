@@ -22,6 +22,8 @@ RUN true \
           libboost-filesystem-dev \
           libboost-regex-dev \
           libboost-system-dev \
+          libdouble-conversion-dev \
+          libgflags-dev \
           libstdc++6-8-dbg \
           pkg-config \
           python \
@@ -31,20 +33,19 @@ RUN true \
 RUN true \
       && mkdir -p /src \
       && cd /src \
-      && curl -Oapache-arrow-0.15.1.tar.gz --location http://archive.apache.org/dist/arrow/arrow-0.15.1/apache-arrow-0.15.1.tar.gz \
-      && tar zxf apache-arrow-0.15.1.tar.gz \
-      && cd apache-arrow-0.15.1/cpp \
+      && curl -Oapache-arrow-0.16.0.tar.gz --location http://archive.apache.org/dist/arrow/arrow-0.16.0/apache-arrow-0.16.0.tar.gz \
+      && tar zxf apache-arrow-0.16.0.tar.gz \
+      && cd apache-arrow-0.16.0/cpp \
       && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release . \
       && make -j4 arrow \
       && make install
 
-ENV PKG_CONFIG_PATH "/src/apache-arrow-0.15.1/cpp/jemalloc_ep-prefix/src/jemalloc_ep/dist/lib/pkgconfig:/src/apache-arrow-0.15.1/cpp/gflags_ep-prefix/src/gflags_ep/lib/pkgconfig"
-ENV CMAKE_PREFIX_PATH "/src/apache-arrow-0.15.1/cpp/double-conversion_ep/src/double-conversion_ep"
+ENV PKG_CONFIG_PATH "/src/apache-arrow-0.16.0/cpp/jemalloc_ep-prefix/src/jemalloc_ep/dist/lib/pkgconfig"
 
 
-FROM python:3.7.4-buster AS python-dev
+FROM python:3.8.1-buster AS python-dev
 
-RUN pip install pyarrow==0.15.1 pytest pandas==0.25.3
+RUN pip install pyarrow==0.16.0 pytest pandas==1.0.0
 
 RUN mkdir /app
 WORKDIR /app
