@@ -1,3 +1,8 @@
+v0.0.8 - 2020-02-25
+-------------------
+
+* `xlsx-to-arrow`: similar to `json-to-arrow` but for XLSX files.
+
 v0.0.7 - 2020-02-21
 -------------------
 

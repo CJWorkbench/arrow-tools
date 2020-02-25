@@ -86,10 +86,7 @@ def do_convert_data(
 
 def test_empty_sheet():
     workbook = xl.Workbook()
-    assert_table_equals(
-        do_convert_data(workbook, header_rows=""),
-        pyarrow.table({})
-    )
+    assert_table_equals(do_convert_data(workbook, header_rows=""), pyarrow.table({}))
 
 
 def test_empty_sheet_no_header_row():
@@ -105,7 +102,7 @@ def test_number_columns():
     sheet.append([3, 3.3])
     assert_table_equals(
         do_convert_data(workbook, header_rows=""),
-        pyarrow.table({"A": [1.0, 2.0, 3.0], "B": [1.1, 2.2, 3.3]})
+        pyarrow.table({"A": [1.0, 2.0, 3.0], "B": [1.1, 2.2, 3.3]}),
     )
 
 
@@ -127,8 +124,7 @@ def test_inline_str_column():
     sheet.append(["a"])
     sheet.append(["b"])
     assert_table_equals(
-        do_convert_data(workbook, header_rows=""),
-        pyarrow.table({"A": ["a", "b"]})
+        do_convert_data(workbook, header_rows=""), pyarrow.table({"A": ["a", "b"]})
     )
 
 
@@ -140,15 +136,29 @@ def test_date_and_datetime_columns():
     # nanoseconds), but the math happens to work for these datetimes.
     #
     # (We aren't testing rounding here.)
-    sheet.append([datetime.date(2020, 1, 25), datetime.datetime(2020, 1, 25, 17, 25, 30, 128000)])
-    sheet.append([datetime.date(2020, 1, 26), datetime.datetime(2020, 1, 25, 17, 26, 27, 256)])
+    sheet.append(
+        [datetime.date(2020, 1, 25), datetime.datetime(2020, 1, 25, 17, 25, 30, 128000)]
+    )
+    sheet.append(
+        [datetime.date(2020, 1, 26), datetime.datetime(2020, 1, 25, 17, 26, 27, 256)]
+    )
     assert_table_equals(
         do_convert_data(workbook, header_rows=""),
-        pyarrow.table({
-            "A": pyarrow.array([datetime.datetime(2020, 1, 25), datetime.datetime(2020, 1, 26)], pyarrow.timestamp("ns")),
-            "B": pyarrow.array([datetime.datetime(2020, 1, 25, 17, 25, 30, 128000),
-                  datetime.datetime(2020, 1, 25, 17, 26, 27, 256)], pyarrow.timestamp("ns"))
-        })
+        pyarrow.table(
+            {
+                "A": pyarrow.array(
+                    [datetime.datetime(2020, 1, 25), datetime.datetime(2020, 1, 26)],
+                    pyarrow.timestamp("ns"),
+                ),
+                "B": pyarrow.array(
+                    [
+                        datetime.datetime(2020, 1, 25, 17, 25, 30, 128000),
+                        datetime.datetime(2020, 1, 25, 17, 26, 27, 256),
+                    ],
+                    pyarrow.timestamp("ns"),
+                ),
+            }
+        ),
     )
 
 
@@ -160,12 +170,21 @@ def test_datetetime_overflow():
     result, stdout = do_convert_data(workbook, include_stdout=True, header_rows="")
     assert_table_equals(
         result,
-        pyarrow.table({
-            "A": pyarrow.array([None, datetime.datetime(1901, 1, 1)], pyarrow.timestamp("ns")),
-            "B": pyarrow.array([datetime.datetime(1901, 1, 1), None], pyarrow.timestamp("ns")),
-        })
+        pyarrow.table(
+            {
+                "A": pyarrow.array(
+                    [None, datetime.datetime(1901, 1, 1)], pyarrow.timestamp("ns")
+                ),
+                "B": pyarrow.array(
+                    [datetime.datetime(1901, 1, 1), None], pyarrow.timestamp("ns")
+                ),
+            }
+        ),
     )
-    assert stdout == b"replaced out-of-range with null for 2 Timestamps; see row 0 column A\n"
+    assert (
+        stdout
+        == b"replaced out-of-range with null for 2 Timestamps; see row 0 column A\n"
+    )
 
 
 def test_skip_null_values():
@@ -175,7 +194,7 @@ def test_skip_null_values():
     sheet["A4"] = 4.0
     assert_table_equals(
         do_convert_data(workbook, header_rows=""),
-        pyarrow.table({"A": [None, 3.0, None, 4.0]})
+        pyarrow.table({"A": [None, 3.0, None, 4.0]}),
     )
 
 
@@ -189,7 +208,14 @@ def test_skip_null_columns():
     result, stdout = do_convert_data(workbook, header_rows="", include_stdout=True)
     assert_table_equals(
         result,
-        pyarrow.table({"A": [3.0, 3.0], "B": pyarrow.array([None, None], pyarrow.utf8()), "C": pyarrow.array([None, None], pyarrow.utf8()), "D": [4.0, 4.0]})
+        pyarrow.table(
+            {
+                "A": [3.0, 3.0],
+                "B": pyarrow.array([None, None], pyarrow.utf8()),
+                "C": pyarrow.array([None, None], pyarrow.utf8()),
+                "D": [4.0, 4.0],
+            }
+        ),
     )
     assert stdout == b"chose string type for null column B and more\n"
 
@@ -215,7 +241,7 @@ def test_bool_becomes_str():
     result, stdout = do_convert_data(workbook, header_rows="", include_stdout=True)
     assert_table_equals(
         do_convert_data(workbook, header_rows=""),
-        pyarrow.table({"A": ["TRUE", "FALSE"]})
+        pyarrow.table({"A": ["TRUE", "FALSE"]}),
     )
 
 
@@ -276,9 +302,7 @@ def test_column_name_invalid():
     sheet = workbook.active
     sheet.append(["A", "B\tC"])
     sheet.append(["a", "b"])
-    result, stdout = do_convert_data(
-        workbook, header_rows="0-1", include_stdout=True
-    )
+    result, stdout = do_convert_data(workbook, header_rows="0-1", include_stdout=True)
     assert_table_equals(result, pyarrow.table({"A": ["a"]}))
     assert stdout == b'ignored invalid column "B\\tC"\n'
 
@@ -288,9 +312,7 @@ def test_column_name_duplicated():
     sheet = workbook.active
     sheet.append(["A", "A", "A", "B", "B"])
     sheet.append(["x", "y", "z", "a", "b"])
-    result, stdout = do_convert_data(
-        workbook, header_rows="0-1", include_stdout=True
-    )
+    result, stdout = do_convert_data(workbook, header_rows="0-1", include_stdout=True)
     assert_table_equals(result, pyarrow.table({"A": ["x"], "B": ["a"]}))
     assert stdout == b"ignored duplicate column A and more starting at row 0\n"
 
@@ -299,10 +321,7 @@ def test_values_truncated():
     workbook = xl.Workbook()
     workbook.active.append(["abcde", "fghijklmn", "opq"])
     result, stdout = do_convert_data(
-        workbook,
-        max_bytes_per_value=3,
-        header_rows="",
-        include_stdout=True,
+        workbook, max_bytes_per_value=3, header_rows="", include_stdout=True,
     )
     assert_table_equals(
         result, pyarrow.table({"A": ["abc"], "B": ["fgh"], "C": ["opq"]})
@@ -328,10 +347,7 @@ def test_truncate_do_not_cause_invalid_utf8():
         workbook.active.append([s])
 
     result, stdout = do_convert_data(
-        workbook,
-        max_bytes_per_value=4,
-        header_rows="",
-        include_stdout=True,
+        workbook, max_bytes_per_value=4, header_rows="", include_stdout=True,
     )
     expected = pyarrow.table(
         {
@@ -358,12 +374,8 @@ def test_convert_float_to_string_and_report():
     workbook.active["A1"] = 3.4
     workbook.active["A2"] = "s"
     workbook.active["A3"] = -2.2
-    result, stdout = do_convert_data(
-        workbook, header_rows="", include_stdout=True,
-    )
-    assert_table_equals(
-        result, pyarrow.table({"A": ["3.4", "s", "-2.2"]})
-    )
+    result, stdout = do_convert_data(workbook, header_rows="", include_stdout=True,)
+    assert_table_equals(result, pyarrow.table({"A": ["3.4", "s", "-2.2"]}))
     assert stdout == b"interpreted 2 Numbers as String; see row 0 column A\n"
 
 
@@ -372,10 +384,7 @@ def test_stop_after_byte_total_limit():
     workbook.active.append(["abcd", "efgh"])
     workbook.active.append(["ijkl", "mnop"])
     result, stdout = do_convert_data(
-        workbook,
-        max_bytes_total=8,
-        header_rows="",
-        include_stdout=True,
+        workbook, max_bytes_total=8, header_rows="", include_stdout=True,
     )
     assert_table_equals(result, pyarrow.table({"A": ["abcd"], "B": ["efgh"]}))
     assert stdout == b"stopped at limit of 8 bytes of data\n"
