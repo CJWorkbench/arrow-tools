@@ -297,6 +297,18 @@ def test_column_name_truncated():
     )
 
 
+def test_column_name_truncated_only_first_row():
+    # v0.0.8: accidentally truncated all values, not just colnames
+    workbook = xl.Workbook()
+    sheet = workbook.active
+    sheet.append(["a", "b"])
+    sheet.append(["xy1", "xy2"])
+    assert_table_equals(
+        do_convert_data(workbook, max_bytes_per_column_name=2, header_rows="0-1"),
+        pyarrow.table({"a": ["xy1"], "b": ["xy2"]}),
+    )
+
+
 def test_column_name_invalid():
     workbook = xl.Workbook()
     sheet = workbook.active

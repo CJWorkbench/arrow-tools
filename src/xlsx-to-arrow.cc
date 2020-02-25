@@ -70,15 +70,15 @@ struct XlsxHandler {
         std::string strValue(cell.to_string());
 
         if (FLAGS_header_rows.size()) {
-            if (strValue.size() > FLAGS_max_bytes_per_column_name) {
-                this->colnameTruncator.append(strValue);
-                strValue = this->colnameTruncator.toUtf8StringView();
-                this->colnameTruncator.reset();
-                this->warnings.warnColumnNameTruncated(strValue);
-            }
-
             // Assume it's "0-1" -- we don't handle anything else yet.
             if (row == 0) {
+                if (strValue.size() > FLAGS_max_bytes_per_column_name) {
+                    this->colnameTruncator.append(strValue);
+                    strValue = this->colnameTruncator.toUtf8StringView();
+                    this->colnameTruncator.reset();
+                    this->warnings.warnColumnNameTruncated(strValue);
+                }
+
                 cb->setName(strValue);
                 return CONTINUE;
             }
@@ -105,28 +105,28 @@ struct XlsxHandler {
         uint64_t nBytesTotalNext = this->nBytesTotal + strValue.size();
 
         if (nBytesTotalNext > FLAGS_max_bytes_total) {
-          this->warnings.warnStoppedOutOfMemory();
-          return STOP;
+            this->warnings.warnStoppedOutOfMemory();
+            return STOP;
         }
 
         switch (cell.data_type()) {
-          case xlnt::cell::type::empty:
-            // Empty cell means null. Don't store anything at all.
-            // (Not-storing anything means null.)FLAGS_max_rows >= 
-            break;
-          case xlnt::cell::type::date:
-            this->addDatetime(*cb, row, cell.value<double>(), cell.base_date(), strValue);
-            break;
-          case xlnt::cell::type::number:
-            if (cell.is_date()) {
+            case xlnt::cell::type::empty:
+                // Empty cell means null. Don't store anything at all.
+                // (Not-storing anything means null.)
+                break;
+            case xlnt::cell::type::date:
                 this->addDatetime(*cb, row, cell.value<double>(), cell.base_date(), strValue);
-            } else {
-                this->addNumber(*cb, row, cell.value<double>(), strValue);
-            }
-            break;
-          default:
-            this->addString(*cb, row, strValue);
-            break;
+                break;
+            case xlnt::cell::type::number:
+                if (cell.is_date()) {
+                    this->addDatetime(*cb, row, cell.value<double>(), cell.base_date(), strValue);
+                } else {
+                    this->addNumber(*cb, row, cell.value<double>(), strValue);
+                }
+                break;
+            default:
+                this->addString(*cb, row, strValue);
+                break;
         }
 
         this->nBytesTotal = nBytesTotalNext;
