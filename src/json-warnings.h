@@ -14,6 +14,8 @@ struct Warnings
     size_t jsonParseErrorPos; // byte number, 0-based
     std::string jsonParseErrorEn; // English message
 
+    std::string xlsxError;
+
     // We did not find an Array of records.
     bool badRoot;
     std::string badRootValue;
@@ -81,10 +83,20 @@ struct Warnings
     int64_t firstValueOverflowFloatRow; // 0-base
     std::string firstValueOverflowFloatColumn;
 
+    // We replaced timestamps that 64-bit ns can't handle to null and lost data
+    size_t nValuesOverflowTimestamp;
+    int64_t firstValueOverflowTimestampRow; // 0-base
+    std::string firstValueOverflowTimestampColumn;
+
     // We converted Number=>Text (users might not expect this)
     size_t nValuesNumberToText;
     int64_t firstValueNumberToTextRow; // 0-base
     std::string firstValueNumberToTextColumn;
+
+    // We converted Timestamp=>Text (users might not expect this)
+    size_t nValuesTimestampToText;
+    int64_t firstValueTimestampToTextRow; // 0-base
+    std::string firstValueTimestampToTextColumn;
 
     Warnings()
         : jsonParseError(false),
@@ -107,13 +119,23 @@ struct Warnings
           firstValueLossyIntToFloatRow(0),
           nValuesOverflowFloat(0),
           firstValueOverflowFloatRow(0),
+          nValuesOverflowTimestamp(0),
+          firstValueOverflowTimestampRow(0),
           nValuesNumberToText(0),
-          firstValueNumberToTextRow(0) {}
+          firstValueNumberToTextRow(0),
+          nValuesTimestampToText(0),
+          firstValueTimestampToTextRow(0)
+    {
+    }
 
     void warnJsonParseError(size_t pos, const std::string& en) {
         this->jsonParseError = true;
         this->jsonParseErrorPos = pos;
         this->jsonParseErrorEn = en;
+    }
+
+    void warnXlsxParseError(const char* what) {
+        this->xlsxError = what;
     }
 
     void warnBadRoot(const StringBuffer& value) {
@@ -214,6 +236,22 @@ struct Warnings
             this->firstValueNumberToTextColumn = column;
         }
         this->nValuesNumberToText += nValues;
+    }
+
+    void warnValuesTimestampToText(size_t nValues, int64_t row, const std::string& column) {
+        if (this->nValuesTimestampToText == 0) {
+            this->firstValueTimestampToTextRow = row;
+            this->firstValueTimestampToTextColumn = column;
+        }
+        this->nValuesNumberToText += nValues;
+    }
+
+    void warnValuesOverflowTimestamp(size_t nValues, int64_t row, const std::string& column) {
+        if (this->nValuesOverflowTimestamp == 0) {
+            this->firstValueOverflowTimestampRow = row;
+            this->firstValueOverflowTimestampColumn = column;
+        }
+        this->nValuesOverflowTimestamp += nValues;
     }
 };
 

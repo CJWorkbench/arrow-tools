@@ -18,6 +18,9 @@ void printWarnings(const Warnings& warnings)
     if (warnings.badRoot) {
         printf("JSON is not an Array or Object containing an Array; got: %s\n", warnings.badRootValue.c_str());
     }
+    if (warnings.xlsxError.size()) {
+        printf("Invalid XLSX file: %s\n", warnings.xlsxError.c_str());
+    }
 
     if (warnings.nRowsSkipped) {
         printf("skipped %lu rows (after row limit of %lu)\n", warnings.nRowsSkipped, FLAGS_max_rows);
@@ -66,5 +69,11 @@ void printWarnings(const Warnings& warnings)
     }
     if (warnings.nValuesNumberToText) {
         printf("interpreted %lu Numbers as String; see row %ld column %s\n", warnings.nValuesNumberToText, warnings.firstValueNumberToTextRow, warnings.firstValueNumberToTextColumn.c_str());
+    }
+    if (warnings.nValuesOverflowTimestamp) {
+        printf("replaced out-of-range with null for %lu Timestamps; see row %ld column %s\n", warnings.nValuesOverflowTimestamp, warnings.firstValueOverflowTimestampRow, warnings.firstValueOverflowTimestampColumn.c_str());
+    }
+    if (warnings.nValuesTimestampToText) {
+        printf("interpreted %lu Timestamps as String; see row %ld column %s\n", warnings.nValuesTimestampToText, warnings.firstValueTimestampToTextRow, warnings.firstValueTimestampToTextColumn.c_str());
     }
 }

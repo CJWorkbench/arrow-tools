@@ -1,7 +1,8 @@
 #ifndef ARROW_TOOLS_STRING_BUFFER_H_
 #define ARROW_TOOLS_STRING_BUFFER_H_
 
-#include "rapidjson/rapidjson.h" // RAPIDJSON_UNLIKELY
+#define LIKELY(x) __builtin_expect((x), 1)
+#define UNLIKELY(x) __builtin_expect((x), 0)
 
 /*
  * A buffer callers may append to infinitely -- but only the first `maxLength`
@@ -28,6 +29,10 @@ struct StringBuffer {
 
     void append(const char* s, size_type len) {
         this->append(reinterpret_cast<const uint8_t*>(s), len);
+    }
+
+    void append(std::string_view sv) {
+        this->append(sv.data(), sv.size());
     }
 
     void append(uint8_t c) {
@@ -57,7 +62,7 @@ struct StringBuffer {
         this->append('"');
         for (uint32_t i = 0; i < len; i++) {
             uint8_t c = s[i];
-            if (RAPIDJSON_UNLIKELY(escape[c])) {
+            if (UNLIKELY(escape[c])) {
                 // \n, \f, \r, etc. Might even be \u....
                 this->append('\\');
                 this->append(escape[c]);

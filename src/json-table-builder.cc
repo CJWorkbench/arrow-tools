@@ -16,22 +16,22 @@ storeStringValue(int64_t row, std::string_view str, arrow::StringBuilder& builde
     ASSERT_ARROW_OK(builder.ReserveData(str.size()), "reserving space for String bytes");
 
     if (row > builder.length()) {
-        // Arrow 0.15.1 is missing UnsafeAppendNulls(); but this can't error
+        // Arrow 0.16.0 is missing UnsafeAppendNulls(); but this can't error
         builder.AppendNulls(row - builder.length());
     }
     builder.UnsafeAppend(str.begin(), str.size());
 }
 
-// pass builderLength separately: builder.length() is wrong in Arrow
-// 0.15.1: https://issues.apache.org/jira/browse/ARROW-7281
 static void
-storeIntValue(int64_t row, int64_t value, arrow::AdaptiveIntBuilder& builder, int64_t& builderLength)
+storeIntValue(int64_t row, int64_t value, arrow::AdaptiveIntBuilder& builder)
 {
-    if (row > builderLength) {
-        ASSERT_ARROW_OK(builder.AppendNulls(row - builderLength), "adding null integers");
+    ASSERT_ARROW_OK(builder.Reserve(row + 1 - builder.length()), "reserving space for Ints");
+    if (row > builder.length()) {
+        // Arrow 0.16.0 is missing UnsafeAppendNulls(); but this can't error
+        builder.AppendNulls(row - builder.length());
     }
-    ASSERT_ARROW_OK(builder.Append(value), "adding integer");
-    builderLength = row + 1;
+    // Arrow 0.16.0 is missing UnsafeAppend(); but this can't error
+    builder.Append(value);
 }
 
 static void
@@ -39,10 +39,21 @@ storeFloat64Value(int64_t row, double value, arrow::DoubleBuilder& builder)
 {
     ASSERT_ARROW_OK(builder.Reserve(row + 1 - builder.length()), "reserving space for Floats");
     if (row > builder.length()) {
-        // Arrow 0.15.1 is missing UnsafeAppendNulls(); but this can't error
+        // Arrow 0.16.0 is missing UnsafeAppendNulls(); but this can't error
         builder.AppendNulls(row - builder.length());
     }
     builder.UnsafeAppend(value);
+}
+
+static void
+storeTimestampValue(int64_t row, int64_t nsSinceEpoch, arrow::TimestampBuilder& builder)
+{
+    ASSERT_ARROW_OK(builder.Reserve(row + 1 - builder.length()), "reserving space for Timestamps");
+    if (row > builder.length()) {
+        // Arrow 0.16.0 is missing UnsafeAppendNulls(); but this can't error
+        builder.AppendNulls(row - builder.length());
+    }
+    builder.UnsafeAppend(nsSinceEpoch);
 }
 
 
@@ -67,6 +78,11 @@ ColumnBuilder::writeString(int64_t row, std::string_view str)
         case FLOAT:
             this->doubleBuilder.reset(nullptr);
             this->dtype = STRING;
+            break;
+
+        case TIMESTAMP:
+            this->timestampBuilder.reset(nullptr);
+            this->dtype = TIMESTAMP;
             break;
     }
 }
@@ -98,6 +114,40 @@ canParseJsonNumberAsInt64(std::string_view str)
             )
         )
     );
+}
+
+
+void
+ColumnBuilder::writeParsedNumber(int64_t row, double value, std::string_view str)
+{
+    storeStringValue(row, str, this->stringBuilder);
+    this->nNumbers++;
+    if (std::isfinite(value)) {
+        this->writeFloat64(row, value);
+    } else {
+        // "nan" and infinity => null
+        this->growToLength(row + 1);
+        // TODO force conversion to FLOAT64, and warn.
+    }
+}
+
+
+void
+ColumnBuilder::writeParsedTimestamp(int64_t row, int64_t nsSinceEpoch, bool isOverflow, std::string_view str)
+{
+    storeStringValue(row, str, this->stringBuilder);
+    this->nTimestamps++;
+
+    if (isOverflow) {
+        this->growToLength(row + 1);
+        // TODO ensure conversion of column to timestamp
+        if (this->nOverflowTimestamps == 0) {
+            this->firstOverflowTimestampRow = row;
+        }
+        this->nOverflowTimestamps++;
+    } else {
+        this->writeTimestamp(row, nsSinceEpoch);
+    }
 }
 
 
@@ -147,15 +197,23 @@ ColumnBuilder::writeInt64(int64_t row, int64_t value)
                 this->firstNumberRow = row;
                 this->dtype = INT;
             }
-            storeIntValue(row, value, *this->intBuilder.get(), this->intBuilderLength);
+            storeIntValue(row, value, *this->intBuilder.get());
             break;
 
         case INT:
-            storeIntValue(row, value, *this->intBuilder.get(), this->intBuilderLength);
+            storeIntValue(row, value, *this->intBuilder.get());
             break;
 
         case FLOAT:
             storeFloat64Value(row, this->convertIntValueToFloatAndMaybeWarn(row, value), *this->doubleBuilder.get());
+            break;
+
+        case TIMESTAMP:
+            // Transition to STRING.
+            // We already stored string data; nothing more is needed
+            this->timestampBuilder.reset(nullptr);
+            this->firstNumberRow = row; // for a warning
+            this->dtype = STRING;
             break;
 
         case STRING:
@@ -168,7 +226,7 @@ ColumnBuilder::writeInt64(int64_t row, int64_t value)
 void
 ColumnBuilder::convertIntToFloat64()
 {
-    int64_t len = this->intBuilderLength;
+    const int64_t len = this->intBuilder->length();
 
     // Strange design here. We _could_ build a separate codepath for
     // int8/int16/int32, knowing they'll never fail to cast to float.
@@ -195,7 +253,6 @@ ColumnBuilder::convertIntToFloat64()
     }
 
     this->intBuilder = nullptr;
-    this->intBuilderLength = 0;
     this->doubleBuilder.reset(doubleBuilder.release());
     this->dtype = FLOAT;
 }
@@ -223,8 +280,80 @@ ColumnBuilder::writeFloat64(int64_t row, double value)
             storeFloat64Value(row, value, *this->doubleBuilder.get());
             break;
 
+        case TIMESTAMP:
+            // Transition to STRING.
+            // We already stored string data; nothing more is needed
+            this->timestampBuilder.reset(nullptr);
+            this->firstNumberRow = row; // for a warning
+            this->dtype = STRING;
+            break;
+
         case STRING:
             // we already stored string data; nothing more is needed
+            break;
+    }
+}
+
+
+void
+ColumnBuilder::writeTimestamp(int64_t row, int64_t nsSinceEpoch)
+{
+    switch (this->dtype) {
+        case UNTYPED:
+            {
+                this->timestampBuilder = std::make_unique<arrow::TimestampBuilder>(
+                    arrow::timestamp(arrow::TimeUnit::NANO),
+                    arrow::default_memory_pool()
+                );
+                this->firstTimestampRow = row;
+                this->dtype = TIMESTAMP;
+            }
+            storeTimestampValue(row, nsSinceEpoch, *this->timestampBuilder.get());
+            break;
+
+        case TIMESTAMP:
+            storeTimestampValue(row, nsSinceEpoch, *this->timestampBuilder.get());
+            break;
+
+        case INT:
+            // Transition to STRING.
+            // We already stored string data; nothing more is needed
+            this->intBuilder.reset(nullptr);
+            this->firstTimestampRow = row; // for a warning
+            this->dtype = STRING;
+            break;
+
+        case FLOAT:
+            // Transition to STRING.
+            // We already stored string data; nothing more is needed
+            this->doubleBuilder.reset(nullptr);
+            this->firstTimestampRow = row; // for a warning
+            this->dtype = STRING;
+            break;
+
+        case STRING:
+            // we already stored string data; nothing more is needed
+            break;
+    }
+}
+
+
+void
+ColumnBuilder::growToLength(int64_t nRows)
+{
+    this->stringBuilder.AppendNulls(nRows - this->stringBuilder.length());
+    switch (this->dtype) {
+        case UNTYPED:
+        case STRING:
+            break;
+        case TIMESTAMP:
+            this->timestampBuilder->AppendNulls(nRows - this->timestampBuilder->length());
+            break;
+        case INT:
+            this->intBuilder->AppendNulls(nRows - this->intBuilder->length());
+            break;
+        case FLOAT:
+            this->doubleBuilder->AppendNulls(nRows - this->doubleBuilder->length());
             break;
     }
 }
@@ -246,7 +375,6 @@ ColumnBuilder::finish(size_t nRows)
             this->stringBuilder.Reset();
             ASSERT_ARROW_OK(this->intBuilder->Finish(&ret), "finishing Int array");
             this->intBuilder.reset(nullptr);
-            this->intBuilderLength = 0;
             this->dtype = UNTYPED;
             break;
         case FLOAT:
@@ -255,17 +383,59 @@ ColumnBuilder::finish(size_t nRows)
             this->doubleBuilder.reset(nullptr);
             this->dtype = UNTYPED;
             break;
+        case TIMESTAMP:
+            this->stringBuilder.Reset();
+            ASSERT_ARROW_OK(this->timestampBuilder->Finish(&ret), "finishing Timestamp array");
+            this->timestampBuilder.reset(nullptr);
+            this->dtype = UNTYPED;
+            break;
     }
 
     return ret;
 }
 
 
-static bool
-isColumnNameInvalid(std::string_view name)
+void
+ColumnBuilder::warnOnErrors(Warnings& warnings)
+{
+    switch (this->dtype) {
+        case STRING:
+            if (this->nNumbers) {
+                warnings.warnValuesNumberToText(this->nNumbers, this->firstNumberRow, this->name);
+            }
+            if (this->nTimestamps) {
+                warnings.warnValuesTimestampToText(this->nTimestamps, this->firstTimestampRow, this->name);
+            }
+            break;
+
+        case FLOAT:
+            if (this->nLossyNumbers) {
+                warnings.warnValuesLossyIntToFloat(this->nLossyNumbers, this->firstLossyNumberRow, this->name);
+            }
+            if (this->nOverflowNumbers) {
+                warnings.warnValuesOverflowFloat(this->nOverflowNumbers, this->firstOverflowNumberRow, this->name);
+            }
+            break;
+
+        case TIMESTAMP:
+            if (this->nOverflowTimestamps) {
+                warnings.warnValuesOverflowTimestamp(this->nOverflowTimestamps, this->firstOverflowTimestampRow, this->name);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+bool
+ColumnBuilder::isColumnNameInvalid(std::string_view name)
 {
     for (auto c : name) {
-        return c < 0x20; // disallow control characters
+        if (c < 0x20) {
+            return true; // disallow control characters
+        }
     }
     return name.size() == 0; // disallow empty string
 }
@@ -274,7 +444,7 @@ isColumnNameInvalid(std::string_view name)
 ColumnBuilder*
 TableBuilder::createColumnOrNull(int64_t row, std::string_view name, Warnings& warnings)
 {
-    if (isColumnNameInvalid(name)) {
+    if (ColumnBuilder::isColumnNameInvalid(name)) {
         warnings.warnColumnNameInvalid(row, name);
         return nullptr;
     }

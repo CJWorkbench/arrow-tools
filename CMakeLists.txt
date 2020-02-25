@@ -28,3 +28,6 @@ target_link_libraries(csv-to-arrow ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDF
 add_executable(json-to-arrow src/json-to-arrow.cc src/common.cc src/json-warnings.cc src/json-table-builder.cc)
 target_include_directories(json-to-arrow PRIVATE vendor/rapidjson-1.1.0)
 target_link_libraries(json-to-arrow ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
+
+add_executable(xlsx-to-arrow src/xlsx-to-arrow.cc src/common.cc src/json-warnings.cc src/json-table-builder.cc)
+target_link_libraries(xlsx-to-arrow ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lxlnt -lpthread -lboost_filesystem -lboost_system)
