@@ -254,11 +254,10 @@ You probably can't avoid degenerate cases (such as a malicious attacker); so
 plan for out-of-memory when you invoke this program.
 
 
-xlsx-to-arrow
--------------
+xlsx-to-arrow, xls-to-arrow
+---------------------------
 
-*Purpose*: convert an Excel 2007+ file to Arrow format, predictably and
-RAM-safely.
+*Purpose*: convert an Excel file to Arrow format, predictably and RAM-safely.
 
 *Usage*:
 
@@ -271,6 +270,9 @@ xlsx-to-arrow input.xlsx output.arrow \
     --max-bytes-total=1073741824 \
     --max-bytes-per-column-name=100
 ```
+
+Use `xlsx-to-arrow` for `.xlsx` files (Excel 2007+). Use `xls-to-arrow` for
+older `.xls` files.
 
 *Features*:
 
@@ -286,6 +288,7 @@ xlsx-to-arrow input.xlsx output.arrow \
 
 ```
 Invalid XLSX file: %s [xlnt::exception for now; may change in a minor version]
+Invalid XLS file: %s
 skipped %d rows (after row limit of %d) [--max-rows]
 stopped at limit of %d bytes of data [--max-bytes-total]
 skipped column %s%s (after column limit of %d) [--max-columns; second %s is either "and more" or ""]

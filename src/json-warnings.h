@@ -14,6 +14,7 @@ struct Warnings
     size_t jsonParseErrorPos; // byte number, 0-based
     std::string jsonParseErrorEn; // English message
 
+    std::string xlsError;
     std::string xlsxError;
 
     // We did not find an Array of records.
@@ -132,6 +133,14 @@ struct Warnings
         this->jsonParseError = true;
         this->jsonParseErrorPos = pos;
         this->jsonParseErrorEn = en;
+    }
+
+    void warnXlsParseError(const char* what) {
+        this->xlsError = what;
+    }
+
+    void warnXlsParseError(const std::string_view& what) {
+        this->xlsError = what;
     }
 
     void warnXlsxParseError(const char* what) {

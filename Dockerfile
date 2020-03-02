@@ -30,6 +30,7 @@ RUN true \
           tar \
       && true
 
+# xlnt
 RUN true \
       && mkdir -p /src \
       && cd /src \
@@ -39,6 +40,7 @@ RUN true \
       && make -j4 \
       && make install
 
+# arrow
 RUN true \
       && mkdir -p /src \
       && cd /src \
@@ -48,12 +50,22 @@ RUN true \
       && make -j4 arrow \
       && make install
 
+# libxls
+RUN true \
+      && mkdir -p /src \
+      && cd /src \
+      && curl --location https://github.com/libxls/libxls/releases/download/v1.5.2/libxls-1.5.2.tar.gz | tar zx \
+      && cd libxls-* \
+      && ./configure --prefix=/usr --enable-static=yes --enable-shared=no \
+      && make -j4 \
+      && make install
+
 ENV PKG_CONFIG_PATH "/src/apache-arrow-0.16.0/cpp/jemalloc_ep-prefix/src/jemalloc_ep/dist/lib/pkgconfig"
 
 
 FROM python:3.8.1-buster AS python-dev
 
-RUN pip install pyarrow==0.16.0 pytest pandas==1.0.0 openpyxl==3.0.3
+RUN pip install pyarrow==0.16.0 pytest pandas==1.0.0 openpyxl==3.0.3 xlwt==1.3.0
 
 RUN mkdir /app
 WORKDIR /app
@@ -63,7 +75,7 @@ FROM cpp-builddeps AS cpp-build
 
 RUN mkdir -p /app/src
 COPY vendor/ /app/vendor/
-RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/xlsx-to-arrow.cc  /app/src/json-warnings.cc /app/src/column-builder.cc /app/src/json-table-builder.cc /app/src/common.cc /app/src/arrow-validate.cc
+RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/xls-to-arrow.cc /app/src/xlsx-to-arrow.cc /app/src/json-warnings.cc /app/src/column-builder.cc /app/src/excel-table-builder.cc /app/src/json-table-builder.cc /app/src/common.cc /app/src/arrow-validate.cc
 WORKDIR /app
 COPY CMakeLists.txt /app
 RUN cmake -DCMAKE_BUILD_TYPE=Release .
@@ -76,6 +88,7 @@ FROM python-dev AS test
 
 COPY --from=cpp-build /app/csv-to-arrow /usr/bin/csv-to-arrow
 COPY --from=cpp-build /app/json-to-arrow /usr/bin/json-to-arrow
+COPY --from=cpp-build /app/xls-to-arrow /usr/bin/xls-to-arrow
 COPY --from=cpp-build /app/xlsx-to-arrow /usr/bin/xlsx-to-arrow
 COPY --from=cpp-build /app/arrow-validate /usr/bin/arrow-validate
 COPY tests/ /app/tests/
@@ -86,5 +99,6 @@ RUN pytest -vv
 FROM scratch AS dist
 COPY --from=cpp-build /app/csv-to-arrow /usr/bin/csv-to-arrow
 COPY --from=cpp-build /app/json-to-arrow /usr/bin/json-to-arrow
+COPY --from=cpp-build /app/xls-to-arrow /usr/bin/xls-to-arrow
 COPY --from=cpp-build /app/xlsx-to-arrow /usr/bin/xlsx-to-arrow
 COPY --from=cpp-build /app/arrow-validate /usr/bin/arrow-validate

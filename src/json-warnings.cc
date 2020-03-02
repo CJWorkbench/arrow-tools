@@ -18,6 +18,9 @@ void printWarnings(const Warnings& warnings)
     if (warnings.badRoot) {
         printf("JSON is not an Array or Object containing an Array; got: %s\n", warnings.badRootValue.c_str());
     }
+    if (warnings.xlsError.size()) {
+        printf("Invalid XLS file: %s\n", warnings.xlsError.c_str());
+    }
     if (warnings.xlsxError.size()) {
         printf("Invalid XLSX file: %s\n", warnings.xlsxError.c_str());
     }
