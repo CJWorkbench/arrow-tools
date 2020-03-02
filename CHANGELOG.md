@@ -1,3 +1,8 @@
+v0.0.10 - 2020-03-02
+--------------------
+
+* `xlsx-to-arrow`: similar to `xlsx-to-arrow` but for (old-style) XLS files.
+
 v0.0.9 - 2020-02-25
 -------------------
 
