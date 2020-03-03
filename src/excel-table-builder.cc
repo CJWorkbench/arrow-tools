@@ -1,23 +1,19 @@
 #include <boost/numeric/conversion/cast.hpp>
-#include <unordered_set>
 #include <gflags/gflags.h>
 
 #include "column-builder.h"
+#include "common.h"
 #include "excel-table-builder.h"
 
-
-class Warnings;
-
 DECLARE_uint32(max_bytes_per_value);
-DECLARE_uint32(max_bytes_per_column_name);
 DECLARE_uint32(max_columns);
+DECLARE_string(header_rows);
 
 ExcelTableBuilder::ExcelTableBuilder()
     : maxRowSeen(-1)
     , maxRowHandled(-1)
     , nBytesTotal(0)
     , columns()
-    , colnameTruncator(FLAGS_max_bytes_per_column_name)
     , valueTruncator(FLAGS_max_bytes_per_value)
 {
 }
@@ -41,7 +37,7 @@ ExcelTableBuilder::buildDefaultColumnName(uint32_t index)
     return std::string(buf);
 }
 
-ColumnBuilder*
+std::pair<ColumnBuilder, StringColumnBuilder>*
 ExcelTableBuilder::column(size_t i)
 {
     if (i >= FLAGS_max_columns) {
@@ -51,54 +47,59 @@ ExcelTableBuilder::column(size_t i)
 
     // Create missing columns. They'll be all-null until we write a value.
     while (this->columns.size() <= i) {
-        this->columns.emplace_back(std::make_unique<ColumnBuilder>(ExcelTableBuilder::buildDefaultColumnName(this->columns.size())));
+        auto column = std::make_unique<std::pair<ColumnBuilder, StringColumnBuilder> >();
+        column->first.setName(ExcelTableBuilder::buildDefaultColumnName(this->columns.size()));
+        this->columns.emplace_back(std::move(column));
     }
 
     return this->columns[i].get();
 }
 
-std::shared_ptr<arrow::Table>
+std::pair<std::shared_ptr<arrow::Table>, std::shared_ptr<arrow::Table> >
 ExcelTableBuilder::finish()
 {
     std::vector<std::shared_ptr<arrow::Array>> arrays;
-    arrays.reserve(this->columns.size());
     std::vector<std::shared_ptr<arrow::Field>> fields;
+    std::vector<std::shared_ptr<arrow::Array>> headerArrays;
+    std::vector<std::shared_ptr<arrow::Field>> headerFields;
+    arrays.reserve(this->columns.size());
     fields.reserve(this->columns.size());
+    headerArrays.reserve(this->columns.size());
+    headerFields.reserve(this->columns.size());
     auto nRows = this->maxRowHandled + 1;
-
-    std::unordered_set<std::string> usedColumnNames;
+    auto nHeaderRows = FLAGS_header_rows == "0-1" ? 1 : 0;
 
     for (auto& column : this->columns) {
-        bool isInserted;
-        std::tie(std::ignore, isInserted) = usedColumnNames.emplace(column->name);
-        if (!isInserted) {
-            // Do not create two columns with the same name. Ignore.
-            StringBuffer buf(column->name.size());
-            buf.append(column->name);
-            this->warnings.warnColumnNameDuplicated(0, buf);
-            continue;
-        }
-        if (ColumnBuilder::isColumnNameInvalid(column->name)) {
-            // Do not create invalid-named columns. Ignore.
-            this->warnings.warnColumnNameInvalid(0, column->name);
-            continue;
-        }
+        auto& columnBuilder = column->first;
 
-        column->growToLength(nRows);
-        column->warnOnErrors(this->warnings);
-        if (column->dtype == ColumnBuilder::UNTYPED) {
-            this->warnings.warnColumnNull(column->name);
+        columnBuilder.growToLength(nRows);
+        columnBuilder.warnOnErrors(this->warnings);
+        if (columnBuilder.dtype == ColumnBuilder::UNTYPED) {
+            this->warnings.warnColumnNull(columnBuilder.name);
         }
-        std::shared_ptr<arrow::Array> array(column->finish(nRows));
-        std::shared_ptr<arrow::Field> field = arrow::field(column->name, array->type());
+        std::shared_ptr<arrow::Array> array(columnBuilder.finish(nRows));
+        std::shared_ptr<arrow::Field> field = arrow::field(columnBuilder.name, array->type());
         arrays.push_back(array);
         fields.push_back(field);
+
+        auto& headerColumnBuilder = column->second;
+        headerColumnBuilder.growToLength(nHeaderRows); // may be 0 rows
+        std::shared_ptr<arrow::Array> headerArray;
+        ASSERT_ARROW_OK(headerColumnBuilder.arrayBuilder.Finish(&headerArray), "converting headers to array");
+        std::shared_ptr<arrow::Field> headerField = arrow::field(columnBuilder.name, arrow::utf8());
+        headerArrays.push_back(headerArray);
+        headerFields.push_back(headerField);
     }
 
     this->columns.clear();
 
     auto schema = arrow::schema(fields);
-    return arrow::Table::Make(schema, arrays, nRows);
+    auto table = arrow::Table::Make(schema, arrays, nRows);
+
+    auto headerSchema = arrow::schema(headerFields);
+    auto headerTable = arrow::Table::Make(headerSchema, headerArrays, nHeaderRows);
+
+    return std::make_pair<std::shared_ptr<arrow::Table>, std::shared_ptr<arrow::Table> >(std::move(table), std::move(headerTable));
 }
 
 void

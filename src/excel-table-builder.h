@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <arrow/api.h>
@@ -17,8 +18,7 @@ struct ExcelTableBuilder {
     int64_t maxRowHandled; // max row index of the output table
     uint64_t nBytesTotal;
     Warnings warnings;
-    std::vector<std::unique_ptr<ColumnBuilder>> columns;
-    StringBuffer colnameTruncator;
+    std::vector<std::unique_ptr<std::pair<ColumnBuilder, StringColumnBuilder> > > columns;
     StringBuffer valueTruncator;
 
     ExcelTableBuilder();
@@ -30,8 +30,16 @@ struct ExcelTableBuilder {
         STOP, // STOP means "ignore the rest of the file"
     } NextAction;
 
-    ColumnBuilder* column(size_t i);
-    std::shared_ptr<arrow::Table> finish();
+    std::pair<ColumnBuilder, StringColumnBuilder>* column(size_t i);
+
+    /**
+     * Build {dataTable, headerTable}, destructively.
+     *
+     * Both tables' column names are "A", "B", "C", etc.
+     *
+     * If nHeaderRows==0, headerTable will be empty.
+     */
+    std::pair<std::shared_ptr<arrow::Table>, std::shared_ptr<arrow::Table> > finish();
 
     void addNumber(ColumnBuilder& cb, int64_t row, double value, std::string_view strValue) const;
     void addString(ColumnBuilder& cb, int64_t row, std::string_view strValue) const;

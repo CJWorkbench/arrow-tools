@@ -1,0 +1,41 @@
+diff --git a/source/detail/serialization/xlsx_consumer.cpp b/source/detail/serialization/xlsx_consumer.cpp
+index ea64b131..b19344e8 100644
+--- a/source/detail/serialization/xlsx_consumer.cpp
++++ b/source/detail/serialization/xlsx_consumer.cpp
+@@ -522,11 +522,7 @@ cell xlsx_consumer::read_cell()
+     cell.d_->parent_ = current_worksheet_;
+     cell.d_->column_ = reference.column_index();
+     cell.d_->row_ = reference.row();
+-
+-    if (parser().attribute_present("ph"))
+-    {
+-        cell.d_->phonetics_visible_ = parser().attribute<bool>("ph");
+-    }
++    cell.d_->phonetics_visible_ = parser().attribute_present("ph") ? parser().attribute<bool>("ph") : false;
+ 
+     auto has_type = parser().attribute_present("t");
+     auto type = has_type ? parser().attribute("t") : "n";
+@@ -535,6 +531,10 @@ cell xlsx_consumer::read_cell()
+     {
+         cell.format(target_.format(static_cast<std::size_t>(std::stoull(parser().attribute("s")))));
+     }
++    else
++    {
++        cell.clear_format();
++    }
+ 
+     auto has_value = false;
+     auto value_string = std::string();
+@@ -587,7 +587,12 @@ cell xlsx_consumer::read_cell()
+     {
+         cell.formula(formula_value_string);
+     }
++    else
++    {
++        cell.clear_formula();
++    }
+ 
++    cell.clear_value();
+     if (has_value)
+     {
+         if (type == "str")

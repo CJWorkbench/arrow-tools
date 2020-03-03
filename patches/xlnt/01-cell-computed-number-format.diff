@@ -1,0 +1,13 @@
+diff --git a/source/cell/cell.cpp b/source/cell/cell.cpp
+index ef6e7b24..7e8d55d4 100644
+--- a/source/cell/cell.cpp
++++ b/source/cell/cell.cpp
+@@ -566,7 +566,7 @@ void cell::data_type(type t)
+ 
+ number_format cell::computed_number_format() const
+ {
+-    return xlnt::number_format();
++    return has_format() ? number_format() : xlnt::number_format();
+ }
+ 
+ font cell::computed_font() const

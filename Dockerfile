@@ -30,16 +30,6 @@ RUN true \
           tar \
       && true
 
-# xlnt
-RUN true \
-      && mkdir -p /src \
-      && cd /src \
-      && curl --location https://github.com/adamhooper/xlnt/archive/ac18fc6dde31fd5a6663594df2ecb07132ae1f65.tar.gz | tar zx \
-      && cd xlnt-* \
-      && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSTATIC=ON -DTESTS=OFF \
-      && make -j4 \
-      && make install
-
 # arrow
 RUN true \
       && mkdir -p /src \
@@ -50,9 +40,19 @@ RUN true \
       && make -j4 arrow \
       && make install
 
+# xlnt
+COPY patches/ /src/patches/
+RUN true \
+      && cd /src \
+      && curl --location https://github.com/adamhooper/xlnt/archive/ac18fc6dde31fd5a6663594df2ecb07132ae1f65.tar.gz | tar zx \
+      && cd xlnt-* \
+      && find /src/patches/xlnt/* -exec patch -p1 -i {} \; \
+      && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSTATIC=ON -DTESTS=OFF \
+      && make -j4 \
+      && make install
+
 # libxls
 RUN true \
-      && mkdir -p /src \
       && cd /src \
       && curl --location https://github.com/libxls/libxls/releases/download/v1.5.2/libxls-1.5.2.tar.gz | tar zx \
       && cd libxls-* \

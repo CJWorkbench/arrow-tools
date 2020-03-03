@@ -15,8 +15,8 @@ def do_convert(
     max_columns: int = 99998,
     max_bytes_per_value: int = 99997,
     max_bytes_total: int = 999999999,
-    max_bytes_per_column_name: int = 99,
     header_rows: str = "0-1",
+    header_rows_file: str = "",
     include_stdout: bool = False
 ) -> Union[pyarrow.Table, Tuple[pyarrow.Table, bytes]]:
     with tempfile.NamedTemporaryFile(suffix=".arrow") as arrow_file:
@@ -30,10 +30,10 @@ def do_convert(
             str(max_bytes_per_value),
             "--max-bytes-total",
             str(max_bytes_total),
-            "--max-bytes-per-column-name",
-            str(max_bytes_per_column_name),
             "--header-rows",
             header_rows,
+            "--header-rows-file",
+            header_rows_file,
             xlsx_path.as_posix(),
             Path(arrow_file.name).as_posix(),
         ]
@@ -55,8 +55,8 @@ def do_convert(
             ) from None
 
         assert result.stderr == b""
-        result_reader = pyarrow.ipc.open_file(arrow_file.name)
-        table = result_reader.read_all()
+        with pyarrow.ipc.open_file(arrow_file.name) as result_reader:
+            table = result_reader.read_all()
         if include_stdout:
             return table, result.stdout
         else:
@@ -263,7 +263,7 @@ def test_skip_rows():
     result, stdout = do_convert_data(
         workbook, max_rows=1, header_rows="0-1", include_stdout=True
     )
-    assert_table_equals(result, pyarrow.table({"Hi": [1.0]}))
+    assert_table_equals(result, pyarrow.table({"A": [1.0]}))
     assert stdout == b"skipped 2 rows (after row limit of 1)\n"
 
 
@@ -280,53 +280,56 @@ def test_skip_columns():
     assert stdout == b"skipped column B and more (after column limit of 1)\n"
 
 
-def test_column_name_truncated():
+def test_header_rows_convert_to_str():
+    workbook = xl.Workbook()
+    sheet = workbook.active
+    sheet.append([datetime.date(2020, 1, 25), 123.4213, 123.4213, None, ""])
+    sheet["A1"].number_format = 'dd-mmm-yyyy'
+    sheet["C1"].number_format = '#.00'
+    sheet.append(["a", "b", "c", "d", "e"])
+    with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
+        # ignore result
+        do_convert_data(
+            workbook, header_rows="0-1", header_rows_file=header_file.name
+        )
+        with pyarrow.ipc.open_file(header_file.name) as header_reader:
+            header_table = header_reader.read_all()
+    assert_table_equals(header_table, pyarrow.table({"A": ["25-Jan-2020"], "B": ["123.4213"], "C": ["123.42"], "D": pyarrow.array([None], pyarrow.utf8()), "E": [""]}))
+
+
+def test_header_rows():
+    workbook = xl.Workbook()
+    sheet = workbook.active
+    sheet.append(["ColA", "ColB"])
+    sheet.append(["a", "b"])
+    with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
+        result = do_convert_data(
+            workbook, header_rows="0-1", header_rows_file=header_file.name
+        )
+        with pyarrow.ipc.open_file(header_file.name) as header_reader:
+            header_table = header_reader.read_all()
+    assert_table_equals(result, pyarrow.table({"A": ["a"], "B": ["b"]}))
+    assert_table_equals(header_table, pyarrow.table({"A": ["ColA"], "B": ["ColB"]}))
+
+
+def test_header_truncated():
     workbook = xl.Workbook()
     sheet = workbook.active
     sheet.append(["xy1", "xy2"])
     sheet.append(["a", "b"])
-    result, stdout = do_convert_data(
-        workbook, max_bytes_per_column_name=2, header_rows="0-1", include_stdout=True
-    )
-    assert_table_equals(result, pyarrow.table({"xy": ["a"]}))
+    with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
+        result, stdout = do_convert_data(
+            workbook, max_bytes_per_value=2, header_rows="0-1", header_rows_file=header_file.name, include_stdout=True
+        )
+        with pyarrow.ipc.open_file(header_file.name) as header_reader:
+            header_table = header_reader.read_all()
+    assert_table_equals(result, pyarrow.table({"A": ["a"], "B": ["b"]}))
+    assert_table_equals(header_table, pyarrow.table({"A": ["xy"], "B": ["xy"]}))
     assert stdout == b"".join(
         [
-            b"truncated 2 column names; example xy\n"
-            b"ignored duplicate column xy starting at row 0\n"
+            b"truncated 2 values (value byte limit is 2; see row 0 column A)\n"
         ]
     )
-
-
-def test_column_name_truncated_only_first_row():
-    # v0.0.8: accidentally truncated all values, not just colnames
-    workbook = xl.Workbook()
-    sheet = workbook.active
-    sheet.append(["a", "b"])
-    sheet.append(["xy1", "xy2"])
-    assert_table_equals(
-        do_convert_data(workbook, max_bytes_per_column_name=2, header_rows="0-1"),
-        pyarrow.table({"a": ["xy1"], "b": ["xy2"]}),
-    )
-
-
-def test_column_name_invalid():
-    workbook = xl.Workbook()
-    sheet = workbook.active
-    sheet.append(["A", "B\tC"])
-    sheet.append(["a", "b"])
-    result, stdout = do_convert_data(workbook, header_rows="0-1", include_stdout=True)
-    assert_table_equals(result, pyarrow.table({"A": ["a"]}))
-    assert stdout == b'ignored invalid column "B\\tC"\n'
-
-
-def test_column_name_duplicated():
-    workbook = xl.Workbook()
-    sheet = workbook.active
-    sheet.append(["A", "A", "A", "B", "B"])
-    sheet.append(["x", "y", "z", "a", "b"])
-    result, stdout = do_convert_data(workbook, header_rows="0-1", include_stdout=True)
-    assert_table_equals(result, pyarrow.table({"A": ["x"], "B": ["a"]}))
-    assert stdout == b"ignored duplicate column A and more starting at row 0\n"
 
 
 def test_values_truncated():

@@ -435,3 +435,24 @@ ColumnBuilder::isColumnNameInvalid(std::string_view name)
     }
     return name.size() == 0; // disallow empty string
 }
+
+
+void
+StringColumnBuilder::growToLength(size_t nRows)
+{
+    if (nRows > this->nextRowIndex) {
+        ASSERT_ARROW_OK(this->arrayBuilder.AppendNulls(nRows - this->nextRowIndex), "appending nulls");
+    }
+}
+
+
+void
+StringColumnBuilder::writeValue(size_t row, std::string_view value)
+{
+    if (row != this->nextRowIndex) {
+        ASSERT_ARROW_OK(this->arrayBuilder.AppendNulls(row - this->nextRowIndex), "appending nulls");
+        this->nextRowIndex = row;
+    }
+    ASSERT_ARROW_OK(this->arrayBuilder.Append(value.data(), value.size()), "appending value");
+    this->nextRowIndex++;
+}

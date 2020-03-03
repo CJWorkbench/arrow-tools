@@ -11,6 +11,7 @@
 #include <gflags/gflags.h>
 
 #include "common.h"
+#include "column-builder.h"
 
 static bool validate_delimiter(const char* flagname, const std::string& delimiter)
 {
@@ -91,33 +92,17 @@ struct ReadCsvResult {
   std::shared_ptr<arrow::Table> table;
 };
 
-struct ColumnBuilder {
-  arrow::StringBuilder arrayBuilder;
-  size_t nextRowIndex;
-
-  ColumnBuilder() : arrayBuilder(arrow::default_memory_pool()), nextRowIndex(0) {}
-
-  void writeValue(size_t row, const uint8_t* bytes, int32_t nBytes)
-  {
-    if (row != this->nextRowIndex) {
-      ASSERT_ARROW_OK(this->arrayBuilder.AppendNulls(row - this->nextRowIndex), "appending nulls");
-      this->nextRowIndex = row;
-    }
-    ASSERT_ARROW_OK(this->arrayBuilder.Append(bytes, nBytes), "appending value");
-    this->nextRowIndex++;
-  }
-};
-
 struct TableBuilder {
-  std::vector<std::unique_ptr<ColumnBuilder> > columnBuilders;
+  std::vector<std::unique_ptr<StringColumnBuilder> > columnBuilders;
 
-  void writeValue(size_t row, size_t column, const uint8_t* bytes, int32_t nBytes) {
+  void writeValue(size_t row, size_t column, std::string_view value) {
     if (column >= columnBuilders.size()) {
+      // add default-ctor StringColumnBuilders
       while (column >= columnBuilders.size()) {
-        this->columnBuilders.emplace_back(std::make_unique<ColumnBuilder>());
+        this->columnBuilders.emplace_back(std::make_unique<StringColumnBuilder>());
       }
     }
-    this->columnBuilders[column]->writeValue(row, bytes, nBytes);
+    this->columnBuilders[column]->writeValue(row, value);
   }
 
   /**
@@ -239,7 +224,7 @@ static ReadCsvResult readCsv(const char* csvFilename, const char delimiter) {
         warnings.warnTruncatedValue(row, column); \
         valuePos = findGreatestValidUtf8Length(valuePtr, FLAGS_max_bytes_per_value); \
       } \
-      builder.writeValue(row, column, valuePtr, valuePos); \
+      builder.writeValue(row, column, std::string_view(reinterpret_cast<char*>(valuePtr), valuePos)); \
     } \
   } while (0)
 

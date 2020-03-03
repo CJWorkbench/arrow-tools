@@ -78,7 +78,7 @@ struct ColumnBuilder {
     } Dtype;
     Dtype dtype;
 
-    ColumnBuilder(const std::string& name_)
+    ColumnBuilder(const std::string& name_ = "")
         : name(name_),
           stringBuilder(arrow::default_memory_pool()),
           nNumbers(0),
@@ -134,5 +134,14 @@ private:
     }
 };
 
-#endif  // ARROW_TOOLS_COLUMN_BUILDER_H_
+struct StringColumnBuilder {
+    arrow::StringBuilder arrayBuilder;
+    size_t nextRowIndex;
 
+    StringColumnBuilder() : arrayBuilder(arrow::default_memory_pool()), nextRowIndex(0) {}
+
+    void growToLength(size_t nRows);
+    void writeValue(size_t row, std::string_view value);
+};
+
+#endif  // ARROW_TOOLS_COLUMN_BUILDER_H_

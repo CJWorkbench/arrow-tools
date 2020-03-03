@@ -30,7 +30,7 @@ target_include_directories(arrow-validate PRIVATE vendor/fastvalidate-utf-8/incl
 target_link_libraries(arrow-validate common ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
 
 add_executable(csv-to-arrow src/csv-to-arrow.cc)
-target_link_libraries(csv-to-arrow common ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
+target_link_libraries(csv-to-arrow column-builder common ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
 
 add_executable(json-to-arrow src/json-to-arrow.cc src/json-table-builder.cc)
 target_include_directories(json-to-arrow PRIVATE vendor/rapidjson-1.1.0)

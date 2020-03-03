@@ -25,9 +25,9 @@
 DEFINE_uint64(max_rows, 1048576, "Skip rows after parsing this many");
 DEFINE_uint32(max_columns, 16384, "Skip columns after parsing this many");
 DEFINE_uint32(max_bytes_per_value, 32767 * 4, "Truncate each value to at most this size");
-DEFINE_uint32(max_bytes_per_column_name, 1024, "Truncate each column header to at most this size");
 DEFINE_uint64(max_bytes_total, std::numeric_limits<uint64_t>::max(), "Truncate file if it surpasses this many bytes of useful data");
-DEFINE_string(header_rows, "0-1", "Treat rows (comma-separated hyphenated [start, end) pairs) as column headers, not values. '' means no headers");
+DEFINE_string(header_rows, "", "Treat rows (comma-separated hyphenated [start, end) pairs) as column headers, not values. '' means no headers; only '0-1' behaves correctly right now");
+DEFINE_string(header_rows_file, "", "Path to write header-row data");
 
 #include "common.h"
 #include "excel-table-builder.h"
@@ -168,29 +168,76 @@ struct XlsTableBuilder : ExcelTableBuilder {
         }
     }
 
+    std::string
+    cellValueString(xls::xlsCell& cell)
+    {
+        switch (cell.id) {
+            case XLS_RECORD_NUMBER:
+            case XLS_RECORD_RK:
+                // libxls changes XLS_RECORD_FORMULA to XLS_RECORD_RK when the
+                // (precomputed, saved) result is a number.
+                {
+                    const xlnt::number_format& format(this->getCellNumberFormat(cell));
+                    return format.format(cell.d, this->calendar);
+                }
+            case XLS_RECORD_BOOLERR:
+                {
+                    bool isError = cell.str && std::string_view(cell.str) == "error";
+                    return excelBoolerrToString(static_cast<uint8_t>(cell.d), isError);
+                }
+
+            case XLS_RECORD_FORMULA:
+            case XLS_RECORD_FORMULA_ALT:
+                // libxls changes type to XLS_RECORD_NUMBER if it detects a
+                // numeric value. But it doesn't change any of the others. If
+                // the result is boolean it writes str="bool" and if the result
+                // is an error it writes str="error". So it cannot represent
+                // the string results "bool" or "error" because they now mean
+                // something else.
+                if (cell.str != nullptr) {
+                    if (std::string_view(cell.str) == "error") {
+                        return excelErrorToString(static_cast<uint8_t>(cell.d));
+                    } else if (std::string_view(cell.str) == "bool") {
+                        return excelBoolToString(static_cast<uint8_t>(cell.d));
+                    } else {
+                        return cell.str;
+                    }
+                } else {
+                    return "";
+                }
+
+            case XLS_RECORD_BLANK:
+            default:
+                if (cell.str != nullptr) {
+                    return cell.str;
+                } else {
+                    return "";
+                }
+        }
+    }
+
     NextAction
     addCell(int64_t row, int32_t col, xls::xlsCell& cell)
     {
-        ColumnBuilder* cb(this->column(col));
-        if (!cb) return CONTINUE;
+        auto* columnBuilderAndHeaderColumnBuilder(this->column(col));
+        if (!columnBuilderAndHeaderColumnBuilder) return CONTINUE;
+        auto& columnBuilder = columnBuilderAndHeaderColumnBuilder->first;
 
-        std::string strValue;
-        if (cell.str) {
-            strValue = cell.str;
-            // otherwise, empty str
+        std::string strValue(cellValueString(cell));
+        if (strValue.size() > FLAGS_max_bytes_per_value) {
+            this->valueTruncator.append(strValue);
+            strValue = this->valueTruncator.toUtf8StringView();
+            this->valueTruncator.reset();
+            this->warnings.warnValueTruncated(row, columnBuilder.name);
         }
 
         if (FLAGS_header_rows.size()) {
             // Assume it's "0-1" -- we don't handle anything else yet.
             if (row == 0) {
-                if (strValue.size() > FLAGS_max_bytes_per_column_name) {
-                    this->colnameTruncator.append(strValue);
-                    strValue = this->colnameTruncator.toUtf8StringView();
-                    this->colnameTruncator.reset();
-                    this->warnings.warnColumnNameTruncated(strValue);
+                auto& headerColumnBuilder = columnBuilderAndHeaderColumnBuilder->second;
+                if (cell.id != XLS_RECORD_BLANK) {
+                    headerColumnBuilder.writeValue(row, strValue);
                 }
-
-                cb->setName(strValue);
                 return CONTINUE;
             }
             // This isn't the header row; second row of xls file should be
@@ -210,7 +257,7 @@ struct XlsTableBuilder : ExcelTableBuilder {
             this->valueTruncator.append(strValue);
             strValue = this->valueTruncator.toUtf8StringView();
             this->valueTruncator.reset();
-            this->warnings.warnValueTruncated(row, cb->name);
+            this->warnings.warnValueTruncated(row, columnBuilder.name);
         }
 
         uint64_t nBytesTotalNext = this->nBytesTotal + strValue.size();
@@ -231,39 +278,18 @@ struct XlsTableBuilder : ExcelTableBuilder {
                 // (precomputed, saved) result is a number.
                 {
                     const xlnt::number_format& format(this->getCellNumberFormat(cell));
-                    strValue = this->getCellNumberFormat(cell).format(cell.d, this->calendar);
                     if (format.is_date_format()) {
-                        this->addDatetime(*cb, row, cell.d, this->calendar, strValue);
+                        this->addDatetime(columnBuilder, row, cell.d, this->calendar, strValue);
                     } else {
-                        this->addNumber(*cb, row, cell.d, strValue);
+                        this->addNumber(columnBuilder, row, cell.d, strValue);
                     }
                 }
                 break;
             case XLS_RECORD_BOOLERR:
-                this->addString(*cb, row, excelBoolerrToString(static_cast<uint8_t>(cell.d), strValue == "error"));
-                break;
-
             case XLS_RECORD_FORMULA:
             case XLS_RECORD_FORMULA_ALT:
-                // libxls changes type to XLS_RECORD_NUMBER if it detects a
-                // numeric value. But it doesn't change any of the others. If
-                // the result is boolean it writes str="bool" and if the result
-                // is an error it writes str="error". So it cannot represent
-                // the string results "bool" or "error" because they now mean
-                // something else.
-                if (strValue == "error") {
-                    this->addString(*cb, row, excelErrorToString(static_cast<uint8_t>(cell.d)));
-                } else if (strValue == "bool") {
-                    this->addString(*cb, row, excelBoolToString(static_cast<uint8_t>(cell.d)));
-                } else {
-                    this->addString(*cb, row, strValue);
-                }
-                break;
-
             default:
-                if (cell.str != nullptr) {
-                    this->addString(*cb, row, strValue);
-                }
+                this->addString(columnBuilder, row, strValue);
                 break;
         }
 
@@ -277,6 +303,7 @@ struct XlsTableBuilder : ExcelTableBuilder {
 struct ReadXlsResult {
     Warnings warnings;
     std::shared_ptr<arrow::Table> table;
+    std::shared_ptr<arrow::Table> headerTable;
 };
 
 static ReadXlsResult readXls(const char* xlsFilename) {
@@ -317,8 +344,10 @@ static ReadXlsResult readXls(const char* xlsFilename) {
         xls::xls_close_WB(workbook);
     }
 
-    std::shared_ptr<arrow::Table> table(builder.finish());
-    return ReadXlsResult { builder.warnings, table };
+    ReadXlsResult result;
+    std::tie(result.table, result.headerTable) = builder.finish();
+    result.warnings = builder.warnings;
+    return result;
 }
 
 int main(int argc, char** argv) {
@@ -336,5 +365,8 @@ int main(int argc, char** argv) {
     ReadXlsResult result = readXls(xlsFilename);
     printWarnings(result.warnings);
     writeArrowTable(*result.table, arrowFilename);
+    if (!FLAGS_header_rows_file.empty()) {
+        writeArrowTable(*result.headerTable, std::string(FLAGS_header_rows_file));
+    }
     return 0;
 }

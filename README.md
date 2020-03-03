@@ -265,10 +265,10 @@ xlsx-to-arrow, xls-to-arrow
 xlsx-to-arrow input.xlsx output.arrow \
     --max-columns=1000 \
     --max-rows=1000000 \
+    --header-rows-file=headers.arrow \
     --header-rows=0-1 \
     --max-bytes-per-value=32768 \
-    --max-bytes-total=1073741824 \
-    --max-bytes-per-column-name=100
+    --max-bytes-total=1073741824
 ```
 
 Use `xlsx-to-arrow` for `.xlsx` files (Excel 2007+). Use `xls-to-arrow` for
@@ -281,9 +281,10 @@ older `.xls` files.
 * _Automatic types_: each column starts null. It will grow to float64 when it
   encounters numbers, timestamp when it encounters dates, and String when it
   encounters anything else (or a mix of types). Conversions always warn.
-* _Sensible column names_: default column names are "A", "B", etc. Column names
-  cannot contain ASCII control characters `0x00-0x1f`, and they cannot be
-  duplicated. (Conflicting columns will be nixed with a warning.)
+* _Excel-ish column names_: column names are "A", "B", etc.
+* _Header rows go to separate table_: column names (strings) won't affect
+  column types this way. Other tools can decide how best to name the final
+  output columns.
 * _Warn on stdout_: stdout can produce lines of text matching these patterns:
 
 ```
@@ -293,9 +294,6 @@ skipped %d rows (after row limit of %d) [--max-rows]
 stopped at limit of %d bytes of data [--max-bytes-total]
 skipped column %s%s (after column limit of %d) [--max-columns; second %s is either "and more" or ""]
 chose string type for null column %s%s [second %s is either "and more" or ""]
-truncated %d column names; example %s [--max-bytes-per-column-name]
-ignored invalid column %s%s [second %s is either "and more" or ""]
-ignored duplicate column %s%s starting at row %d [second %s is either "and more" or ""]
 truncated %d values (value byte limit is %d; see row %d column %s) [--max-bytes-per-value]
 replaced infinity with null for %d Numbers; see row %d column %s
 replaced out-of-range with null for %d Timestamps; see row %d column %s
