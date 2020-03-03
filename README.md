@@ -283,8 +283,8 @@ older `.xls` files.
   encounters anything else (or a mix of types). Conversions always warn.
 * _Excel-ish column names_: column names are "A", "B", etc.
 * _Header rows go to separate table_: column names (strings) won't affect
-  column types this way. Other tools can decide how best to name the final
-  output columns.
+  column types this way. Other tools can read `--header-rows-file` and decide
+  how best to name the final output columns.
 * _Warn on stdout_: stdout can produce lines of text matching these patterns:
 
 ```

@@ -1,3 +1,14 @@
+v0.0.11 - 2020-03-03
+--------------------
+
+* xls(x)-to-arrow: column names are _always_ "A", "B", "C", etc.
+* xls(x)-to-arrow: nix `--max-bytes-per-column-name`
+* xls(x)-to-arrow: add `--header-rows-file=PATH` option, to write header rows
+  as strings to a separate Arrow output file.
+* xls(x)-to-arrow: use cell format for nice string values
+* xls(x)-to-arrow: use correct (formatted) string length for max-bytes calculations
+* xlsx-to-arrow: don't copy previous-cell format+value onto next cells
+
 v0.0.10 - 2020-03-02
 --------------------
 
