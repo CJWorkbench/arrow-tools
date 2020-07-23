@@ -1,0 +1,64 @@
+diff --git a/include/xlnt/worksheet/pane.hpp b/include/xlnt/worksheet/pane.hpp
+index eb35a599..b9a5f4d7 100644
+--- a/include/xlnt/worksheet/pane.hpp
++++ b/include/xlnt/worksheet/pane.hpp
+@@ -72,14 +72,20 @@ struct XLNT_API pane
+     pane_corner active_pane = pane_corner::top_left;
+ 
+     /// <summary>
+-    /// The row where the split should take place
++    /// Vertical position of the split, in 1/20th of a point; 0 (zero) if none.
++    ///
++    /// If the pane is frozen, this value indicates the number of rows visible
++    /// in the top pane.
+     /// </summary>
+-    row_t y_split = 1;
++    double y_split = 1;
+ 
+     /// <summary>
+-    /// The column where the split should take place
++    /// Vertical position of the split, in 1/20th of a point; 0 (zero) if none.
++    ///
++    /// If the pane is frozen, this value indicates the number of columns visible
++    /// in the top pane.
+     /// </summary>
+-    column_t x_split = 1;
++    double x_split = 1;
+ 
+     /// <summary>
+     /// Returns true if this pane is equal to rhs based on its top-left cell, state,
+diff --git a/source/detail/serialization/xlsx_consumer.cpp b/source/detail/serialization/xlsx_consumer.cpp
+index 62d9c418..10d27fc3 100644
+--- a/source/detail/serialization/xlsx_consumer.cpp
++++ b/source/detail/serialization/xlsx_consumer.cpp
+@@ -734,12 +734,12 @@ std::string xlsx_consumer::read_worksheet_begin(const std::string &rel_id)
+ 
+                         if (parser().attribute_present("xSplit"))
+                         {
+-                            new_pane.x_split = parser().attribute<column_t::index_t>("xSplit");
++                            new_pane.x_split = parser().attribute<double>("xSplit");
+                         }
+ 
+                         if (parser().attribute_present("ySplit"))
+                         {
+-                            new_pane.y_split = parser().attribute<row_t>("ySplit");
++                            new_pane.y_split = parser().attribute<double>("ySplit");
+                         }
+ 
+                         if (parser().attribute_present("activePane"))
+diff --git a/source/detail/serialization/xlsx_producer.cpp b/source/detail/serialization/xlsx_producer.cpp
+index e6683a31..b9e4fc74 100644
+--- a/source/detail/serialization/xlsx_producer.cpp
++++ b/source/detail/serialization/xlsx_producer.cpp
+@@ -2321,9 +2321,9 @@ void xlsx_producer::write_worksheet(const relationship &rel)
+                 write_attribute("topLeftCell", current_pane.top_left_cell.get().to_string());
+             }
+ 
+-            if (current_pane.x_split + 1 == current_pane.top_left_cell.get().column())
++            if (current_pane.x_split + 1 == current_pane.top_left_cell.get().column().index)
+             {
+-                write_attribute("xSplit", current_pane.x_split.index);
++                write_attribute("xSplit", current_pane.x_split);
+             }
+ 
+             if (current_pane.y_split + 1 == current_pane.top_left_cell.get().row())

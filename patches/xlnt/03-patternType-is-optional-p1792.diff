@@ -1,0 +1,48 @@
+diff --git a/source/detail/serialization/xlsx_consumer.cpp b/source/detail/serialization/xlsx_consumer.cpp
+index 62d9c418..a65eded7 100644
+--- a/source/detail/serialization/xlsx_consumer.cpp
++++ b/source/detail/serialization/xlsx_consumer.cpp
+@@ -2209,26 +2209,26 @@ void xlsx_consumer::read_stylesheet()
+                     if (parser().attribute_present("patternType"))
+                     {
+                         pattern.type(parser().attribute<xlnt::pattern_fill_type>("patternType"));
++                    }
+ 
+-                        while (in_element(qn("spreadsheetml", "patternFill")))
+-                        {
+-                            auto pattern_type_element = expect_start_element(xml::content::complex);
+-
+-                            if (pattern_type_element == qn("spreadsheetml", "fgColor"))
+-                            {
+-                                pattern.foreground(read_color());
+-                            }
+-                            else if (pattern_type_element == qn("spreadsheetml", "bgColor"))
+-                            {
+-                                pattern.background(read_color());
+-                            }
+-                            else
+-                            {
+-                                unexpected_element(pattern_type_element);
+-                            }
++                    while (in_element(qn("spreadsheetml", "patternFill")))
++                    {
++                        auto pattern_type_element = expect_start_element(xml::content::complex);
+ 
+-                            expect_end_element(pattern_type_element);
++                        if (pattern_type_element == qn("spreadsheetml", "fgColor"))
++                        {
++                            pattern.foreground(read_color());
++                        }
++                        else if (pattern_type_element == qn("spreadsheetml", "bgColor"))
++                        {
++                            pattern.background(read_color());
+                         }
++                        else
++                        {
++                            unexpected_element(pattern_type_element);
++                        }
++
++                        expect_end_element(pattern_type_element);
+                     }
+ 
+                     new_fill = pattern;

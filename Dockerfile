@@ -44,7 +44,7 @@ RUN true \
 COPY patches/ /src/patches/
 RUN true \
       && cd /src \
-      && curl --location https://github.com/adamhooper/xlnt/archive/ac18fc6dde31fd5a6663594df2ecb07132ae1f65.tar.gz | tar zx \
+      && curl --location https://github.com/tfussell/xlnt/archive/v1.5.0.tar.gz | tar zx \
       && cd xlnt-* \
       && find /src/patches/xlnt/* -exec patch -p1 -i {} \; \
       && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSTATIC=ON -DTESTS=OFF \

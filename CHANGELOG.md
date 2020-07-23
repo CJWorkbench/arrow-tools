@@ -1,3 +1,9 @@
+v0.0.12 - 2020-07-23
+--------------------
+
+* Bump xlnt to v1.5.0. Test with Bureau of Labor Statistics CPI xlsx file,
+  and author a couple of xlnt patches that make it hum.
+
 v0.0.11 - 2020-03-03
 --------------------
 
