@@ -4,8 +4,8 @@ FROM debian:buster AS cpp-builddeps
 # changes (but don't commit them):
 #
 # * in Dockerfile, ensure libstdc++6-8-dbg is installed (this, we commit)
-# * in Dockerfile, set -DCMAKE_BUILD_TYPE=Debug when building Arrow
-# * in Dockerfile, set -DCMAKE_BUILD_TYPE=Debug when building csv-to-arrow
+# * in Dockerfile, set CMAKE_BUILD_TYPE=Debug here
+ENV CMAKE_BUILD_TYPE=Release
 
 RUN true \
       && apt-get update \
@@ -36,7 +36,7 @@ RUN true \
       && cd /src \
       && curl --location http://archive.apache.org/dist/arrow/arrow-0.16.0/apache-arrow-0.16.0.tar.gz | tar zx \
       && cd apache-arrow-0.16.0/cpp \
-      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release . \
+      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE . \
       && make -j4 arrow \
       && make install
 
@@ -47,7 +47,7 @@ RUN true \
       && curl --location https://github.com/tfussell/xlnt/archive/v1.5.0.tar.gz | tar zx \
       && cd xlnt-* \
       && find /src/patches/xlnt/* -exec patch -p1 -i {} \; \
-      && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSTATIC=ON -DTESTS=OFF \
+      && cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DCMAKE_DEBUG_POSTFIX= -DCMAKE_INSTALL_PREFIX=/usr -DSTATIC=ON -DTESTS=OFF \
       && make -j4 \
       && make install
 
@@ -78,7 +78,7 @@ COPY vendor/ /app/vendor/
 RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/xls-to-arrow.cc /app/src/xlsx-to-arrow.cc /app/src/json-warnings.cc /app/src/column-builder.cc /app/src/excel-table-builder.cc /app/src/json-table-builder.cc /app/src/common.cc /app/src/arrow-validate.cc
 WORKDIR /app
 COPY CMakeLists.txt /app
-RUN cmake -DCMAKE_BUILD_TYPE=Release .
+RUN cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE .
 
 COPY src/ /app/src/
 RUN make -j4

@@ -1,8 +1,14 @@
+v0.0.13 - 2020-07-28
+--------------------
+
+* xlsx-to-arrow: Fix reading of empty rows: now, CPI xlsx file should
+  be readable.
+
 v0.0.12 - 2020-07-23
 --------------------
 
-* Bump xlnt to v1.5.0. Test with Bureau of Labor Statistics CPI xlsx file,
-  and author a couple of xlnt patches that make it hum.
+* xlsx-to-arrow: Bump xlnt to v1.5.0. Fix some issues with Bureau of Labor
+  Statistics CPI xlsx file, and author a couple of xlnt patches that make it hum.
 
 v0.0.11 - 2020-03-03
 --------------------
