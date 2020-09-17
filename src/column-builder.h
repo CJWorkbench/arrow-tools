@@ -44,7 +44,8 @@ class Warnings;
  *
  * How to read this diagram:
  *
- * * When at any type and encountering an empty string, do not transition
+ * * When handling an empty string, do not transition. This happens in Excel
+ *   files with missing (whitespace) numbers. (In JSON, we probably don't care.)
  * * When at UNTYPED and encountering a value of another type, transition to
  *   it.
  * * When at UNTYPED or any type and encountering null, stay.

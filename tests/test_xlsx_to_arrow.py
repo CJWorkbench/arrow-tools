@@ -290,6 +290,18 @@ def test_invalid_zipfile():
     assert stdout == b"Invalid XLSX file: xlnt::exception : failed to find zip header\n"
 
 
+def test_xml_error():
+    result, stdout = do_convert(
+        Path(__file__).parent / "files" / "xml-required-attribute-missing-in-rels.xlsx",
+        include_stdout=True,
+    )
+    assert_table_equals(result, pyarrow.table({}))
+    assert (
+        stdout
+        == b"Invalid XLSX file: xl/_rels/workbook.xml.rels:2:84: error: attribute 'Target' expected\n"
+    )
+
+
 def test_skip_rows():
     workbook = xl.Workbook()
     sheet = workbook.active

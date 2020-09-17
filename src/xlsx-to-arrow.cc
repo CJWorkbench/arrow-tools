@@ -28,6 +28,7 @@ DEFINE_string(header_rows, "", "Treat rows (comma-separated hyphenated [start, e
 DEFINE_string(header_rows_file, "", "Path to write header-row data");
 
 #include "common.h"
+#include "libstudxml-shim.h"
 #include "excel-table-builder.h"
 #include "json-warnings.h"
 
@@ -139,6 +140,8 @@ static ReadXlsxResult readXlsx(const char* xlsxFilename) {
             }
         }
     } catch (xlnt::exception& err) {
+        builder.warnings.warnXlsxParseError(err.what());
+    } catch (xml::exception& err) {
         builder.warnings.warnXlsxParseError(err.what());
     }
 
