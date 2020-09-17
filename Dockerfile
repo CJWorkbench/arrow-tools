@@ -1,11 +1,11 @@
 FROM debian:buster AS cpp-builddeps
 
-# DEBUG SYMBOLS: to build with debug symbols (which help gdb), do these
-# changes (but don't commit them):
+# DEBUG SYMBOLS: to build with debug symbols (which help gdb), run
+# `docker build --build-arg CMAKE_BUILD_TYPE=Debug ...`
 #
-# * in Dockerfile, ensure libstdc++6-8-dbg is installed (this, we commit)
-# * in Dockerfile, set CMAKE_BUILD_TYPE=Debug here
-ENV CMAKE_BUILD_TYPE=Release
+# We install libstdc++6-8-dbg regardless. Final binaries won't include debug
+# symbols in (default) release mode.
+ARG CMAKE_BUILD_TYPE=Release
 
 RUN true \
       && apt-get update \

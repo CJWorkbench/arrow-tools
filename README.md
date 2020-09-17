@@ -320,10 +320,13 @@ To make a faster development loop when you need it most, use `docker` to
 jump in with an intermediate image. You can see all `IMAGE_ID`s in the
 `docker build .` output.
 
-* `docker run -it --rm --volume "$(pwd):/app" IMAGE_ID bash` -- start a
-  Bash shell, and overwrite the image's source code with our own. The mounted
-  volume means you can `make` or `pytest` immediately after you edit source
-  code. (That's not normal.)
+For instance:
+
+`docker run -it --rm --volume "$(pwd):/data" "$(docker build -q --target=cpp-build --build-arg CMAKE_BUILD_TYPE=Debug .)" bash`
+-- start a Bash shell, with the program debug-compiled and our path mounted at
+`/data`. Inside the shell, you can `apt update && apt install -y gdb` to run GDB.
+Then run `gdb xlsx-to-arrow` and `r /data/crashy-file.xlsx /data/out.arrow` to
+run in debug mode.
 
 
 Deploying
