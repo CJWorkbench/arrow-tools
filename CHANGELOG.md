@@ -1,3 +1,10 @@
+v0.0.14 - 2020-09-17
+--------------------
+
+* xlsx-to-arrow, xls-to-arrow, json-to-arrow: do not convert a number
+  column to String if the only String values are purely whitespace.
+* xlsx-to-arrow: catch and report XML errors.
+
 v0.0.13 - 2020-07-28
 --------------------
 
