@@ -200,6 +200,29 @@ def test_convert_datetime_to_string_and_report():
     assert stdout == b"interpreted 1 Timestamps as String; see row 0 column A\n"
 
 
+def test_datetime_do_not_convert_to_string_when_value_is_whitespace():
+    workbook = xl.Workbook()
+    sheet = workbook.active
+    sheet["A1"] = datetime.date(1981, 1, 1)
+    sheet["A2"] = "  "
+    sheet["A3"] = datetime.date(1983, 1, 1)
+    assert_table_equals(
+        do_convert_data(workbook, header_rows=""),
+        pyarrow.table(
+            {
+                "A": pyarrow.array(
+                    [
+                        datetime.datetime(1981, 1, 1),
+                        None,
+                        datetime.datetime(1983, 1, 1),
+                    ],
+                    pyarrow.timestamp("ns"),
+                ),
+            }
+        ),
+    )
+
+
 def test_skip_null_values():
     workbook = xl.Workbook()
     sheet = workbook.active
@@ -426,6 +449,42 @@ def test_convert_float_to_string_and_report():
     )
     assert_table_equals(result, pyarrow.table({"A": ["3.4", "s", "-2.2"]}))
     assert stdout == b"interpreted 2 Numbers as String; see row 0 column A\n"
+
+
+def test_float_do_not_convert_to_string_when_value_is_whitespace():
+    workbook = xl.Workbook()
+    workbook.active["A1"] = 3.4
+    workbook.active["A2"] = "  "
+    workbook.active["A3"] = -2.2
+    assert_table_equals(
+        do_convert_data(workbook, header_rows=""),
+        pyarrow.table({"A": [3.4, None, -2.2]}),
+    )
+
+
+def test_float_do_not_convert_to_string_when_first_cell_is_whitespace():
+    workbook = xl.Workbook()
+    workbook.active["A1"] = "  "
+    workbook.active["A2"] = -2.2
+    assert_table_equals(
+        do_convert_data(workbook, header_rows=""),
+        pyarrow.table({"A": [None, -2.2]}),
+    )
+
+
+def test_float_convert_to_string_preserve_previously_ignored_whitespace():
+    workbook = xl.Workbook()
+    workbook.active["A1"] = 3.4
+    workbook.active["A2"] = "  "
+    workbook.active["A3"] = "x"
+    result, stdout = do_convert_data(
+        workbook,
+        header_rows="",
+        include_stdout=True,
+    )
+    assert_table_equals(result, pyarrow.table({"A": ["3.4", "  ", "x"]}))
+    # Whitespace isn't "counted" as Number, even though we treated it as a null Number
+    assert stdout == b"interpreted 1 Numbers as String; see row 0 column A\n"
 
 
 def test_stop_after_byte_total_limit():

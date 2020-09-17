@@ -281,7 +281,9 @@ older `.xls` files.
 * _Limit value size_: truncate values if they consume too many bytes.
 * _Automatic types_: each column starts null. It will grow to float64 when it
   encounters numbers, timestamp when it encounters dates, and String when it
-  encounters anything else (or a mix of types). Conversions always warn.
+  encounters anything else (or a mix of types).
+    * Conversions always warn.
+    * Whitespace-only cells don't trigger conversion.
 * _Excel-ish column names_: column names are "A", "B", etc.
 * _Header rows go to separate table_: column names (strings) won't affect
   column types this way. Other tools can read `--header-rows-file` and decide

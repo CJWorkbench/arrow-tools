@@ -31,19 +31,20 @@ class Warnings;
  *
  * Full type transition diagram:
  *
- *                / INT64 -----+
- *               /    |         \
- *              /     v          \
- *     UNTYPED +--- FLOAT64 ---+  \
- *             |\               \  \
- *             | \               \  \
- *             |  \ TIMESTAMP -+  \  \
- *              \               \  \  \
- *               \               v  v  v
- *                +-------------- STRING
+ *                +-> INT64 -----+
+ *               /      |         \
+ *              /       v          \
+ *     UNTYPED +----> FLOAT64 ---+  \
+ *             |\                 \  \
+ *             | \                 \  \
+ *             |  +-> TIMESTAMP -+  \  \
+ *              \                 \  \  \
+ *               \                 v  v  v
+ *                +---------------> STRING
  *
  * How to read this diagram:
  *
+ * * When at any type and encountering an empty string, do not transition
  * * When at UNTYPED and encountering a value of another type, transition to
  *   it.
  * * When at UNTYPED or any type and encountering null, stay.

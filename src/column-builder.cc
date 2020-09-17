@@ -58,28 +58,30 @@ ColumnBuilder::writeString(int64_t row, std::string_view str)
 {
     storeStringValue(row, str, this->stringBuilder);
 
-    switch (this->dtype) {
-        case UNTYPED:
-            this->dtype = STRING;
-            break;
+    if (str.find_first_not_of(' ') != std::string_view::npos) {
+        switch (this->dtype) {
+            case UNTYPED:
+                this->dtype = STRING;
+                break;
 
-        case STRING:
-            break;
+            case STRING:
+                break;
 
-        case INT:
-            this->intBuilder.reset(nullptr);
-            this->dtype = STRING;
-            break;
+            case INT:
+                this->intBuilder.reset(nullptr);
+                this->dtype = STRING;
+                break;
 
-        case FLOAT:
-            this->doubleBuilder.reset(nullptr);
-            this->dtype = STRING;
-            break;
+            case FLOAT:
+                this->doubleBuilder.reset(nullptr);
+                this->dtype = STRING;
+                break;
 
-        case TIMESTAMP:
-            this->timestampBuilder.reset(nullptr);
-            this->dtype = STRING;
-            break;
+            case TIMESTAMP:
+                this->timestampBuilder.reset(nullptr);
+                this->dtype = STRING;
+                break;
+        }
     }
 }
 
