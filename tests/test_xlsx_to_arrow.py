@@ -162,7 +162,7 @@ def test_date_and_datetime_columns():
     )
 
 
-def test_datetetime_overflow():
+def test_datetime_overflow():
     workbook = xl.Workbook()
     sheet = workbook.active
     sheet.append([datetime.date(1100, 1, 1), datetime.date(1901, 1, 1)])
@@ -185,6 +185,19 @@ def test_datetetime_overflow():
         stdout
         == b"replaced out-of-range with null for 2 Timestamps; see row 0 column A\n"
     )
+
+
+def test_convert_datetime_to_string_and_report():
+    workbook = xl.Workbook()
+    sheet = workbook.active
+    sheet["A1"] = datetime.date(1981, 1, 1)
+    sheet["A2"] = "hi"
+    result, stdout = do_convert_data(workbook, include_stdout=True, header_rows="")
+    assert_table_equals(
+        result,
+        pyarrow.table({"A": ["1981-01-01", "hi"]}),
+    )
+    assert stdout == b"interpreted 1 Timestamps as String; see row 0 column A\n"
 
 
 def test_skip_null_values():
@@ -284,17 +297,26 @@ def test_header_rows_convert_to_str():
     workbook = xl.Workbook()
     sheet = workbook.active
     sheet.append([datetime.date(2020, 1, 25), 123.4213, 123.4213, None, ""])
-    sheet["A1"].number_format = 'dd-mmm-yyyy'
-    sheet["C1"].number_format = '#.00'
+    sheet["A1"].number_format = "dd-mmm-yyyy"
+    sheet["C1"].number_format = "#.00"
     sheet.append(["a", "b", "c", "d", "e"])
     with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
         # ignore result
-        do_convert_data(
-            workbook, header_rows="0-1", header_rows_file=header_file.name
-        )
+        do_convert_data(workbook, header_rows="0-1", header_rows_file=header_file.name)
         with pyarrow.ipc.open_file(header_file.name) as header_reader:
             header_table = header_reader.read_all()
-    assert_table_equals(header_table, pyarrow.table({"A": ["25-Jan-2020"], "B": ["123.4213"], "C": ["123.42"], "D": pyarrow.array([None], pyarrow.utf8()), "E": [""]}))
+    assert_table_equals(
+        header_table,
+        pyarrow.table(
+            {
+                "A": ["25-Jan-2020"],
+                "B": ["123.4213"],
+                "C": ["123.42"],
+                "D": pyarrow.array([None], pyarrow.utf8()),
+                "E": [""],
+            }
+        ),
+    )
 
 
 def test_header_rows():
@@ -319,16 +341,18 @@ def test_header_truncated():
     sheet.append(["a", "b"])
     with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
         result, stdout = do_convert_data(
-            workbook, max_bytes_per_value=2, header_rows="0-1", header_rows_file=header_file.name, include_stdout=True
+            workbook,
+            max_bytes_per_value=2,
+            header_rows="0-1",
+            header_rows_file=header_file.name,
+            include_stdout=True,
         )
         with pyarrow.ipc.open_file(header_file.name) as header_reader:
             header_table = header_reader.read_all()
     assert_table_equals(result, pyarrow.table({"A": ["a"], "B": ["b"]}))
     assert_table_equals(header_table, pyarrow.table({"A": ["xy"], "B": ["xy"]}))
     assert stdout == b"".join(
-        [
-            b"truncated 2 values (value byte limit is 2; see row 0 column A)\n"
-        ]
+        [b"truncated 2 values (value byte limit is 2; see row 0 column A)\n"]
     )
 
 
@@ -336,7 +360,10 @@ def test_values_truncated():
     workbook = xl.Workbook()
     workbook.active.append(["abcde", "fghijklmn", "opq"])
     result, stdout = do_convert_data(
-        workbook, max_bytes_per_value=3, header_rows="", include_stdout=True,
+        workbook,
+        max_bytes_per_value=3,
+        header_rows="",
+        include_stdout=True,
     )
     assert_table_equals(
         result, pyarrow.table({"A": ["abc"], "B": ["fgh"], "C": ["opq"]})
@@ -362,7 +389,10 @@ def test_truncate_do_not_cause_invalid_utf8():
         workbook.active.append([s])
 
     result, stdout = do_convert_data(
-        workbook, max_bytes_per_value=4, header_rows="", include_stdout=True,
+        workbook,
+        max_bytes_per_value=4,
+        header_rows="",
+        include_stdout=True,
     )
     expected = pyarrow.table(
         {
@@ -389,7 +419,11 @@ def test_convert_float_to_string_and_report():
     workbook.active["A1"] = 3.4
     workbook.active["A2"] = "s"
     workbook.active["A3"] = -2.2
-    result, stdout = do_convert_data(workbook, header_rows="", include_stdout=True,)
+    result, stdout = do_convert_data(
+        workbook,
+        header_rows="",
+        include_stdout=True,
+    )
     assert_table_equals(result, pyarrow.table({"A": ["3.4", "s", "-2.2"]}))
     assert stdout == b"interpreted 2 Numbers as String; see row 0 column A\n"
 
@@ -399,7 +433,10 @@ def test_stop_after_byte_total_limit():
     workbook.active.append(["abcd", "efgh"])
     workbook.active.append(["ijkl", "mnop"])
     result, stdout = do_convert_data(
-        workbook, max_bytes_total=8, header_rows="", include_stdout=True,
+        workbook,
+        max_bytes_total=8,
+        header_rows="",
+        include_stdout=True,
     )
     assert_table_equals(result, pyarrow.table({"A": ["abcd"], "B": ["efgh"]}))
     assert stdout == b"stopped at limit of 8 bytes of data\n"

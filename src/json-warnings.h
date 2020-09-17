@@ -252,7 +252,7 @@ struct Warnings
             this->firstValueTimestampToTextRow = row;
             this->firstValueTimestampToTextColumn = column;
         }
-        this->nValuesNumberToText += nValues;
+        this->nValuesTimestampToText += nValues;
     }
 
     void warnValuesOverflowTimestamp(size_t nValues, int64_t row, const std::string& column) {

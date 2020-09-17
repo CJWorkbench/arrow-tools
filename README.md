@@ -213,6 +213,7 @@ truncated %d values (value byte limit is %d; see row %d column %s) [--max-bytes-
 lost precision converting %d int64 Numbers to float64; see row %d column %s
 replaced infinity with null for %d Numbers; see row %d column %s
 interpreted %d Numbers as String; see row %d column %s
+interpreted %d Timestamps as String; see row %d column %s
 ```
 
 The intent is for callers to parse using regular expressions. Messages won't

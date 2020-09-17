@@ -78,7 +78,7 @@ ColumnBuilder::writeString(int64_t row, std::string_view str)
 
         case TIMESTAMP:
             this->timestampBuilder.reset(nullptr);
-            this->dtype = TIMESTAMP;
+            this->dtype = STRING;
             break;
     }
 }
