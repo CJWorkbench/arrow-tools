@@ -11,9 +11,14 @@ void writeArrowTable(const arrow::Table& arrowTable, const std::string& path)
     "opening output stream"
   ));
   std::shared_ptr<arrow::ipc::RecordBatchWriter> fileWriter(ASSERT_ARROW_OK(
-    arrow::ipc::RecordBatchFileWriter::Open(outputStream.get(), arrowTable.schema()),
-    "creating file writer"
+    arrow::ipc::NewFileWriter(
+      outputStream.get(),
+      arrowTable.schema(),
+      arrow::ipc::IpcWriteOptions { .use_threads = false }
+    ),
+    "opening output file"
   ));
   ASSERT_ARROW_OK(fileWriter->WriteTable(arrowTable), "writing Arrow table");
-  ASSERT_ARROW_OK(fileWriter->Close(), "closing Arrow file");
+  ASSERT_ARROW_OK(fileWriter->Close(), "closing Arrow file writer");
+  ASSERT_ARROW_OK(outputStream->Close(), "closing Arrow file");
 }

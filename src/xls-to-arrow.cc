@@ -16,7 +16,6 @@
 #include <utility>
 
 #include <arrow/api.h>
-#include <boost/numeric/conversion/cast.hpp>
 #include <gflags/gflags.h>
 #include <xls.h>
 #include <xlnt/styles/number_format.hpp>

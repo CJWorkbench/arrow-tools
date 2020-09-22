@@ -13,32 +13,38 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-march=haswell -Wall -Werror)
 
 # Look for installed packages the system
-pkg_search_module(ARROW REQUIRED arrow)
-pkg_search_module(JEMALLOC REQUIRED jemalloc)
+find_package(gflags REQUIRED)
+find_package(Arrow REQUIRED)
+# From https://github.com/apache/arrow/blob/afe5515754d4c4f67a0e5ee066513f8383f00d70/cpp/examples/minimal_build/CMakeLists.txt#L37
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
-include_directories(SYSTEM ${ARROW_INCLUDE_DIR})
+include_directories(SYSTEM ${ARROW_INCLUDE_DIR} ${GFLAGS_INCLUDE_DIRS})
 
 add_library(common src/common.cc)
 add_library(column-builder src/column-builder.cc)
-target_link_libraries(column-builder ${ARROW_STATIC_LDFLAGS})
+target_link_libraries(column-builder arrow)
 add_library(excel-table-builder src/excel-table-builder.cc)
 target_link_libraries(excel-table-builder column-builder)
 add_library(json-warnings src/json-warnings.cc)
 
+set(COMMON_LIBS Threads::Threads arrow_static gflags_static)
+
 add_executable(arrow-validate src/arrow-validate.cc)
-target_include_directories(arrow-validate PRIVATE vendor/fastvalidate-utf-8/include)
-target_link_libraries(arrow-validate common ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
+target_link_libraries(arrow-validate PRIVATE -static common ${COMMON_LIBS})
 
 add_executable(csv-to-arrow src/csv-to-arrow.cc)
-target_link_libraries(csv-to-arrow column-builder common ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
+target_link_libraries(csv-to-arrow PRIVATE -static column-builder common ${COMMON_LIBS})
 
 add_executable(json-to-arrow src/json-to-arrow.cc src/json-table-builder.cc)
 target_include_directories(json-to-arrow PRIVATE vendor/rapidjson-1.1.0)
-target_link_libraries(json-to-arrow common json-warnings column-builder ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lpthread -lboost_filesystem -lboost_system)
+target_link_libraries(json-to-arrow PRIVATE -static common json-warnings column-builder ${COMMON_LIBS})
 
 add_executable(xls-to-arrow src/xls-to-arrow.cc)
 # -lxlnt is for xlnt::calendar (trivial) and xlnt::number_format (complex)
-target_link_libraries(xls-to-arrow common column-builder json-warnings excel-table-builder ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lxlnt -lxlsreader -lpthread -lboost_filesystem -lboost_system)
+target_link_libraries(xls-to-arrow PRIVATE -static common json-warnings column-builder excel-table-builder ${COMMON_LIBS} -lxlnt -lxlsreader)
 
 add_executable(xlsx-to-arrow src/xlsx-to-arrow.cc)
-target_link_libraries(xlsx-to-arrow common column-builder json-warnings excel-table-builder ${ARROW_STATIC_LDFLAGS} ${JEMALLOC_STATIC_LDFLAGS} -static -ldouble-conversion -lgflags -lxlnt -lpthread -lboost_filesystem -lboost_system)
+target_link_libraries(xlsx-to-arrow PRIVATE -static common column-builder json-warnings excel-table-builder ${COMMON_LIBS} -lxlnt)
+
+install(TARGETS arrow-validate csv-to-arrow json-to-arrow xls-to-arrow xlsx-to-arrow DESTINATION /usr/bin)

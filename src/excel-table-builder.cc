@@ -1,4 +1,5 @@
-#include <boost/numeric/conversion/cast.hpp>
+#include <cfenv> // std::fetestexcept()
+#include <cmath> // std::llround()
 #include <gflags/gflags.h>
 
 #include "column-builder.h"
@@ -133,14 +134,12 @@ ExcelTableBuilder::addDatetime(ColumnBuilder& cb, int64_t row, double value, xln
             break;
     }
     double nsSinceEpochDouble = (value - epochDays) * 86400 * 1000000000;
-    int64_t nsSinceEpoch;
-    bool isOverflow;
-    try {
-        nsSinceEpoch = boost::numeric_cast<int64_t>(nsSinceEpochDouble);
-        isOverflow = false;
-    } catch (boost::numeric::bad_numeric_cast& e) {
-        nsSinceEpoch = 0;
-        isOverflow = true;
+
+    std::feclearexcept(FE_ALL_EXCEPT);
+    int64_t nsSinceEpoch = std::llround(nsSinceEpochDouble);
+    bool isOverflow = std::fetestexcept(FE_INVALID);
+    if (isOverflow) {
+      nsSinceEpoch = 0;
     }
 
     cb.writeParsedTimestamp(row, nsSinceEpoch, isOverflow, strValue);

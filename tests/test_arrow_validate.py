@@ -9,8 +9,7 @@ from .util import arrow_file
 
 
 ALL_CHECKS = {
-    "utf8": True,
-    "offsets-dont-overflow": True,
+    "safe": True,
     "floats-all-finite": True,
     "dictionary-values-all-used": True,
     "dictionary-values-not-null": True,
@@ -48,7 +47,7 @@ def validate(
         return (result.stdout, result.stderr)
 
 
-def test_check_offsets_dont_overflow_string_array():
+def test_check_safe_string_array():
     array = pa.StringArray.from_buffers(
         2,
         # value_offsets: last byte of data is 9.
@@ -59,8 +58,8 @@ def test_check_offsets_dont_overflow_string_array():
     )
     table = pa.table({"A": array})
     with arrow_file(table) as path:
-        assert validate(path, {"offsets-dont-overflow": True}) == (
-            "--check-offsets-dont-overflow failed on column A\n",
+        assert validate(path, {"safe": True}) == (
+            "--check-safe failed: Invalid: Length spanned by binary offsets (9) larger than values array (size 8)\n",
             "",
         )
 
@@ -68,7 +67,7 @@ def test_check_offsets_dont_overflow_string_array():
 def test_check_utf8_valid_string_array():
     table = pa.table({"A": ["Montréal", None, ""]})
     with arrow_file(table) as path:
-        assert validate(path, {"utf8": True}) is None
+        assert validate(path, {"safe": True}) is None
 
 
 def test_check_utf8_invalid_string_array():
@@ -81,8 +80,8 @@ def test_check_utf8_invalid_string_array():
     )
     table = pa.table({"A": array})
     with arrow_file(table) as path:
-        assert validate(path, {"utf8": True}) == (
-            "--check-utf8 failed on column A\n",
+        assert validate(path, {"safe": True}) == (
+            "--check-safe failed: Invalid: Invalid UTF8 sequence at string index 0\n",
             "",
         )
 
@@ -90,7 +89,7 @@ def test_check_utf8_invalid_string_array():
 def test_check_utf8_valid_dict_values():
     table = pa.table({"A": pa.array(["Montréal", None, ""]).dictionary_encode()})
     with arrow_file(table) as path:
-        assert validate(path, {"utf8": True}) is None
+        assert validate(path, {"safe": True}) is None
 
 
 def test_check_utf8_invalid_dict_values():
@@ -103,8 +102,8 @@ def test_check_utf8_invalid_dict_values():
     )
     table = pa.table({"A": array.dictionary_encode()})
     with arrow_file(table) as path:
-        assert validate(path, {"utf8": True}) == (
-            "--check-utf8 failed on column A\n",
+        assert validate(path, {"safe": True}) == (
+            "--check-safe failed: Invalid: Invalid UTF8 sequence at string index 0\n",
             "",
         )
 
@@ -112,8 +111,8 @@ def test_check_utf8_invalid_dict_values():
 def test_check_utf8_invalid_column_name():
     table = pa.table({b"b\xc9ad": [1, 2, 3]})
     with arrow_file(table) as path:
-        assert validate(path, {"utf8": True}) == (
-            "--check-utf8 failed on a column name\n",
+        assert validate(path, {"safe": True}) == (
+            "--check-safe failed on a column name with invalid UTF-8\n",
             "",
         )
 

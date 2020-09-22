@@ -35,8 +35,7 @@ arrow-validate
 
 ```
 arrow-validate input.arrow \
-    --check-utf8 \
-    --check-offsets-dont-overflow \
+    --check-safe \
     --check-floats-all-finite \
     --check-dictionary-values-all-used \
     --check-dictionary-values-not-null \
@@ -45,19 +44,20 @@ arrow-validate input.arrow \
     --check-column-name-max-bytes=100
 ```
 
-`arrow-validate` implements checks that should arguably be included in Arrow
-itself. It returns exit code 0 if validation passes, or 1 if validation fails.
+`arrow-validate` checks that a file meets preconditions. It returns exit
+code 0 if validation passes, or 1 if validation fails.
 
-The two most-obvious checks are UTF-8 validation and buffer-overflow detection.
-These code paths are highly optimized, and you should use them liberally.
+The most obvious check is --check-safe: it verifies that the file's pointers
+don't exceed buffer lengths and that the schema matches the data. Use it.
 
 The other checks are opinionated. They help callers make assumptions about
 the Arrow file.
 
 *Features*:
 
-* `--check-utf8`: validate UTF-8 in column names, utf8 columns and dictionaries.
-* `--check-offsets-dont-overflow`: ensure offsets don't cause buffer overflow.
+* `--check-safe`: ensure offsets don't cause buffer overflow, row lengths line
+                  up, null counts are valid, and UTF-8 is valid in column names,
+                  columns and dictionaries.
 * `--check-floats-all-finite`: disallow NaN, -Infinity and Infinity.
 * `--check-dictionary-values-all-used`: disallow unused dictionary values.
 * `--check-dictionary-values-not-null`: disallow nulls in dictionaries.
@@ -72,15 +72,9 @@ the Arrow file.
 --check-dictionary-values-unique failed on column My Column
 ```
 
-Two potential errors follow a slightly different pattern: they omit invalid
-column names, so output is valid UTF-8:
-
-```
---check-column-name-control-characters failed on a column name
---check-utf8 failed on a column name
-```
-
-Error-message patterns are guaranteed not to change between major versions.
+There will always be exactly one error, and it will always begin with the
+`--check-xxx` flag that led to it and a space. The rest of the message is
+check-dependent and may change, even in minor versions.
 
 csv-to-arrow
 ------------
@@ -324,11 +318,11 @@ jump in with an intermediate image. You can see all `IMAGE_ID`s in the
 
 For instance:
 
-`docker run -it --rm --volume "$(pwd):/data" "$(docker build -q --target=cpp-build --build-arg CMAKE_BUILD_TYPE=Debug .)" bash`
--- start a Bash shell, with the program debug-compiled and our path mounted at
-`/data`. Inside the shell, you can `apt update && apt install -y gdb` to run GDB.
-Then run `gdb xlsx-to-arrow` and `r /data/crashy-file.xlsx /data/out.arrow` to
-run in debug mode.
+```
+docker run -it --rm --volume "$(pwd):/data" \
+   "$(docker build -q --target=cpp-build --build-arg CMAKE_BUILD_TYPE=Debug .)" \
+   gdb --args ./xlsx-to-arrow /data/crashy-file.xlsx /data/out.arrow`
+```
 
 
 Deploying
@@ -336,21 +330,9 @@ Deploying
 
 1. Write to `CHANGELOG.md`
 2. `git commit`
-3. `git tag VERSION` (use semver -- e.g., `v1.2.3`)
+3. `git tag VERSION` (use semver -- e.g., `v2.2.3`)
 4. `git push --tags && git push`
-5. Wait; Docker Hub will publish the new image **SEE NOTE**
-
-**NOTE** Currently, Docker Hub automatic builds don't use AVX2 instructions,
-so the builds fail. For now, the workaround is:
-
-1. `docker build . -t workbenchdata/arrow-tools:VERSION`
-2. `docker push workbenchdata/arrow-tools:VERSION`
-
-Longer-term, several paths would work: A) use AVX, not AVX2, and suffer a
-not-yet-measured slowdown; B) switch away from Docker Hub; C) wait for
-Docker Hub to upgrade its machines; D) use runtime CPU feature detection, so
-Docker Hub runs different code than production.
-
+5. Wait; Docker Hub will publish the new image
 
 License
 =======

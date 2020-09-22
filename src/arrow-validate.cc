@@ -6,61 +6,19 @@
 #include <arrow/compute/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+#include <arrow/util/utf8.h>
 #include <arrow/visitor_inline.h>
 #include <gflags/gflags.h>
-#include <simdutf8check.h>
 
 #include "common.h"
 
-DEFINE_bool(check_utf8, true, "Ensure all utf8() and dictionary(..., utf8()) columns are well-formed");
-DEFINE_bool(check_offsets_dont_overflow, true, "Ensure all utf8() and dictionary(..., utf8()) offsets don't overflow data buffers");
+DEFINE_bool(check_safe, true, "Ensure all utf8() and dictionary(..., utf8()) offsets don't overflow data buffers, utf8 is all valid, plus other built-in Arrow tests");
 DEFINE_bool(check_floats_all_finite, false, "Ensure all float16, float32 and float64 values are finite (not NaN or Infinity)");
 DEFINE_bool(check_dictionary_values_all_used, false, "Ensure there are no spurious dictionary values");
 DEFINE_bool(check_dictionary_values_not_null, false, "Ensure there are no null dictionary values");
 DEFINE_bool(check_dictionary_values_unique, false, "Ensure there are no duplicate dictionary values");
 DEFINE_bool(check_column_name_control_characters, false, "Ensure no column name includes ASCII control characters");
 DEFINE_uint32(check_column_name_max_bytes, 0, "Enforce a maximum column-name length");
-
-
-template<typename ArrayType>
-bool
-checkOffsetsDontOverflow(const ArrayType& array)
-{
-  // arrow's ValidateOffsets() already ensures offset 0 is 0. It also ensures
-  // offsets increase monotonically, and that null-valued offsets copy the
-  // previous offset, and that N values lead to N+1 offsets.
-
-  using offset_type = typename ArrayType::offset_type;
-  auto offsets = array.value_offsets();
-  if (!offsets) return true; // no offsets means no overflow offsets
-  offset_type lastOffset = array.value_offset(array.length());
-  offset_type maxValidOffset = static_cast<offset_type>(array.value_data()->size());
-  return lastOffset <= maxValidOffset;
-}
-
-
-int
-checkUtf8(const arrow::StringArray& array)
-{
-  // assume checkOffsetsDontOverflow() was already called
-  const int32_t* offsets = array.raw_value_offsets();
-  if (!offsets) return 0; // all-null array
-  const int32_t* offsetsEnd = &offsets[array.length()];
-  const char* data = reinterpret_cast<const char*>(array.value_data()->data());
-
-  uint32_t prevOffset = *offsets; // 0
-  ++offsets; // advance to next offset (for N values, Arrow stores N+1 offsets)
-  while (offsets <= offsetsEnd) {
-    const uint32_t offset = *offsets;
-    ++offsets;
-    if (offset == prevOffset) continue; // value is null or empty string
-    if (!validate_utf8_fast_avx_asciipath(&data[prevOffset], offset - prevOffset)) {
-      return false;
-    }
-    prevOffset = offset;
-  }
-  return true;
-}
 
 
 static arrow::Status validateArray(const arrow::Array& array);
@@ -152,9 +110,12 @@ checkDictionaryValuesAllUsed(const arrow::Array& indices, const arrow::Array& di
 static bool
 checkDictionaryValuesUnique(const std::shared_ptr<arrow::Array> dictionary)
 {
-  std::shared_ptr<arrow::Array> uniques;
-  arrow::compute::FunctionContext ctx(arrow::default_memory_pool());
-  ASSERT_ARROW_OK(arrow::compute::Unique(&ctx, dictionary, &uniques), "checking dictionary is unique");
+  arrow::compute::ExecContext ctx;
+  ctx.set_use_threads(false);
+  std::shared_ptr<arrow::Array> uniques = ASSERT_ARROW_OK(
+    arrow::compute::Unique(dictionary, &ctx),
+    "checking dictionary is unique"
+  );
   return uniques->length() == dictionary->length();
 }
 
@@ -198,16 +159,6 @@ struct ValidateVisitor {
 
   arrow::Status Visit(const arrow::StringArray& array)
   {
-    if (FLAGS_check_offsets_dont_overflow) {
-      if (!checkOffsetsDontOverflow(array)) {
-        return arrow::Status::Invalid("--check-offsets-dont-overflow");
-      }
-    }
-    if (FLAGS_check_utf8) {
-      if (!checkUtf8(array)) {
-        return arrow::Status::Invalid("--check-utf8");
-      }
-    }
     return arrow::Status::OK();
   }
 
@@ -259,9 +210,9 @@ validateArray(const arrow::Array& array)
 static bool
 validateColumnName(const std::string& name)
 {
-  if (FLAGS_check_utf8) {
-    if (!validate_utf8_fast_avx_asciipath(name.c_str(), name.size())) {
-      std::cout << "--check-utf8 failed on a column name" << std::endl;
+  if (FLAGS_check_safe) {
+    if (!arrow::util::ValidateUTF8(reinterpret_cast<const uint8_t*>(name.c_str()), name.size())) {
+      std::cout << "--check-safe failed on a column name with invalid UTF-8" << std::endl;
       return false;
     }
   }
@@ -304,7 +255,13 @@ validateColumn(const std::string& name, const arrow::Array& array)
 static bool
 validateRecordBatch(arrow::RecordBatch& batch)
 {
-  ASSERT_ARROW_OK(batch.Validate(), "validating batch for schema or length inconsistencies");
+  if (FLAGS_check_safe) {
+    arrow::Status status = batch.ValidateFull();
+    if (!status.ok()) {
+      std::cout << "--check-safe failed: " << status.ToString() << std::endl;
+      return false;
+    }
+  }
 
   int nColumns = batch.num_columns();
   for (int i = 0; i < nColumns; i++) {
@@ -324,13 +281,17 @@ validateArrowFile(const std::string& filename)
     arrow::io::MemoryMappedFile::Open(filename, arrow::io::FileMode::READ),
     "opening Arrow file"
   ));
-  std::shared_ptr<arrow::ipc::RecordBatchFileReader> reader;
-  ASSERT_ARROW_OK(arrow::ipc::RecordBatchFileReader::Open(file, &reader), "reading Arrow file header");
+  std::shared_ptr<arrow::ipc::RecordBatchFileReader> reader = ASSERT_ARROW_OK(
+    arrow::ipc::RecordBatchFileReader::Open(file.get(), arrow::ipc::IpcReadOptions { .use_threads = false }),
+    "reading Arrow file header"
+  );
 
   int nBatches = reader->num_record_batches();
   for (int i = 0; i < nBatches; i++) {
-    std::shared_ptr<arrow::RecordBatch> batch;
-    ASSERT_ARROW_OK(reader->ReadRecordBatch(i, &batch), "reading record batch");
+    std::shared_ptr<arrow::RecordBatch> batch = ASSERT_ARROW_OK(
+      reader->ReadRecordBatch(i),
+      "reading record batch"
+    );
     if (!validateRecordBatch(*batch)) {
       return false;
     }
@@ -350,9 +311,8 @@ int main(int argc, char** argv)
     std::_Exit(1);
   }
 
-  if (FLAGS_check_utf8 && !FLAGS_check_offsets_dont_overflow) {
-    std::cerr << "--check-utf8 requires you also enable --check-offsets-dont-overflow" << std::endl;
-    return 1;
+  if (FLAGS_check_safe) {
+    arrow::util::InitializeUTF8();
   }
 
   const std::string arrowFilename(argv[1]);

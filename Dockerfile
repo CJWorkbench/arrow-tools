@@ -1,43 +1,51 @@
 FROM debian:buster AS cpp-builddeps
 
-# DEBUG SYMBOLS: to build with debug symbols (which help gdb), run
-# `docker build --build-arg CMAKE_BUILD_TYPE=Debug ...`
+# We build Arrow ourselves instead of using precompiled binaries. Two reasons:
 #
-# We install libstdc++6-8-dbg regardless. Final binaries won't include debug
-# symbols in (default) release mode.
-ARG CMAKE_BUILD_TYPE=Release
+# 1. File size. These statically-linked executables get copied and run a lot.
+#    Smaller files mean faster deploys (and marginally-faster start time).
+# 2. Dev experience. With --build-arg CMAKE_BUILD_TYPE=Debug, we can help this
+#    package's maintainer get a useful stack trace sooner.
 
 RUN true \
       && apt-get update \
-      && apt-get install -y \
-          autoconf \
-          bison \
+      && apt-get install -y --no-install-recommends \
           build-essential \
+          ca-certificates \
           cmake \
           curl \
-          flex \
-          g++ \
-          gnupg \
-          libboost-dev \
-          libboost-filesystem-dev \
-          libboost-regex-dev \
-          libboost-system-dev \
+          gdb \
+          libc-dbg \
           libdouble-conversion-dev \
           libgflags-dev \
+          libsnappy-dev \
           libstdc++6-8-dbg \
           pkg-config \
-          python \
           tar \
-      && true
+          time
 
-# arrow
 RUN true \
       && mkdir -p /src \
       && cd /src \
-      && curl --location http://archive.apache.org/dist/arrow/arrow-0.16.0/apache-arrow-0.16.0.tar.gz | tar zx \
-      && cd apache-arrow-0.16.0/cpp \
-      && cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE . \
-      && make -j4 arrow \
+      && curl https://apache.mirror.colo-serv.net/arrow/arrow-1.0.1/apache-arrow-1.0.1.tar.gz | tar xz
+
+# DEBUG SYMBOLS: to build with debug symbols (which help gdb), run
+# `docker build --build-arg CMAKE_BUILD_TYPE=Debug ...`
+#
+# We install libstdc++6-8-dbg, gdb and time regardless. They won't affect final
+# image size in Release mode.
+ARG CMAKE_BUILD_TYPE=Release
+
+# arrow
+RUN true \
+      && cd /src/apache-arrow-1.0.1/cpp \
+      && cmake \
+        -DARROW_COMPUTE=ON \
+        -DARROW_OPTIONAL_INSTALL=ON \
+        -DARROW_BUILD_STATIC=ON \
+        -DARROW_BUILD_SHARED=OFF \
+        -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE . \
+      && make -j4 arrow arrow_bundled_dependencies \
       && make install
 
 # xlnt
@@ -47,7 +55,12 @@ RUN true \
       && curl --location https://github.com/tfussell/xlnt/archive/v1.5.0.tar.gz | tar zx \
       && cd xlnt-* \
       && find /src/patches/xlnt/* -exec patch -p1 -i {} \; \
-      && cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DCMAKE_DEBUG_POSTFIX= -DCMAKE_INSTALL_PREFIX=/usr -DSTATIC=ON -DTESTS=OFF \
+      && cmake \
+        -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
+        -DCMAKE_DEBUG_POSTFIX= \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DSTATIC=ON \
+        -DTESTS=OFF \
       && make -j4 \
       && make install
 
@@ -59,8 +72,6 @@ RUN true \
       && ./configure --prefix=/usr --enable-static=yes --enable-shared=no \
       && make -j4 \
       && make install
-
-ENV PKG_CONFIG_PATH "/src/apache-arrow-0.16.0/cpp/jemalloc_ep-prefix/src/jemalloc_ep/dist/lib/pkgconfig"
 
 
 FROM python:3.8.1-buster AS python-dev
@@ -75,30 +86,37 @@ FROM cpp-builddeps AS cpp-build
 
 RUN mkdir -p /app/src
 COPY vendor/ /app/vendor/
-RUN touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/xls-to-arrow.cc /app/src/xlsx-to-arrow.cc /app/src/json-warnings.cc /app/src/column-builder.cc /app/src/excel-table-builder.cc /app/src/json-table-builder.cc /app/src/common.cc /app/src/arrow-validate.cc
+RUN touch \
+  /app/src/arrow-validate.cc \
+  /app/src/column-builder.cc \
+  /app/src/common.cc \
+  /app/src/csv-to-arrow.cc \
+  /app/src/excel-table-builder.cc \
+  /app/src/json-table-builder.cc \
+  /app/src/json-to-arrow.cc \
+  /app/src/json-warnings.cc \
+  /app/src/xls-to-arrow.cc \
+  /app/src/xlsx-to-arrow.cc
+
 WORKDIR /app
 COPY CMakeLists.txt /app
+# Redeclare CMAKE_BUILD_TYPE: its scope is its build stage
+ARG CMAKE_BUILD_TYPE=Release
 RUN cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE .
 
 COPY src/ /app/src/
-RUN make -j4
+RUN VERBOSE=true make -j4 install/strip
+# Display size. In v2.1, it's ~7MB per executable.
+RUN ls -lh /usr/bin/*arrow*
 
 
 FROM python-dev AS test
 
-COPY --from=cpp-build /app/csv-to-arrow /usr/bin/csv-to-arrow
-COPY --from=cpp-build /app/json-to-arrow /usr/bin/json-to-arrow
-COPY --from=cpp-build /app/xls-to-arrow /usr/bin/xls-to-arrow
-COPY --from=cpp-build /app/xlsx-to-arrow /usr/bin/xlsx-to-arrow
-COPY --from=cpp-build /app/arrow-validate /usr/bin/arrow-validate
+COPY --from=cpp-build /usr/bin/*arrow* /usr/bin/
 COPY tests/ /app/tests/
 WORKDIR /app
 RUN pytest -vv
 
 
 FROM scratch AS dist
-COPY --from=cpp-build /app/csv-to-arrow /usr/bin/csv-to-arrow
-COPY --from=cpp-build /app/json-to-arrow /usr/bin/json-to-arrow
-COPY --from=cpp-build /app/xls-to-arrow /usr/bin/xls-to-arrow
-COPY --from=cpp-build /app/xlsx-to-arrow /usr/bin/xlsx-to-arrow
-COPY --from=cpp-build /app/arrow-validate /usr/bin/arrow-validate
+COPY --from=cpp-build /usr/bin/*arrow* /usr/bin/

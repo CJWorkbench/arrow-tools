@@ -1,3 +1,12 @@
+v1.0.0 - 2020-09-22
+-------------------
+
+Major version bump -- this is not backwards-compatible.
+
+* Upgrade underlying Arrow to 1.0.1.
+* arrow-validate: nix `--check-utf8` and `--check-offsets-dont-overflow` and
+  present `--check-safe` instead. Arrow v1 checks all this for us.
+
 v0.0.14 - 2020-09-17
 --------------------
 

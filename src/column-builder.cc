@@ -1,4 +1,5 @@
 #include <charconv>
+#include <cmath> // std::isfinite()
 
 #include "column-builder.h"
 #include "common.h"
