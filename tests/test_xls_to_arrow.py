@@ -1,10 +1,12 @@
 import datetime
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import Tuple, Union
-import xlwt as xl
+
 import pyarrow
+import xlwt as xl
+
 from .util import assert_table_equals
 
 
@@ -84,19 +86,19 @@ def do_convert_data(
 
 def test_empty_sheet():
     workbook = xl.Workbook()
-    workbook.add_sheet('X')
+    workbook.add_sheet("X")
     assert_table_equals(do_convert_data(workbook, header_rows=""), pyarrow.table({}))
 
 
 def test_empty_sheet_no_header_row():
     workbook = xl.Workbook()
-    workbook.add_sheet('X')
+    workbook.add_sheet("X")
     assert_table_equals(do_convert_data(workbook, header_rows="0-1"), pyarrow.table({}))
 
 
 def test_number_columns():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('A')
+    sheet = workbook.add_sheet("A")
     sheet.write(0, 0, 1)
     sheet.write(0, 1, 1.1)
     sheet.write(1, 0, 2)
@@ -123,7 +125,7 @@ def test_number_columns():
 
 def test_inline_str_column():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('A')
+    sheet = workbook.add_sheet("A")
     sheet.write(0, 0, "a")
     sheet.write(1, 0, "b")
     assert_table_equals(
@@ -133,7 +135,7 @@ def test_inline_str_column():
 
 def test_date_and_datetime_columns():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('A')
+    sheet = workbook.add_sheet("A")
     # These dates are chosen specially -- double precision can't represent
     # every arbitrary number of microseconds accurately (let alone
     # nanoseconds), but the math happens to work for these datetimes.
@@ -143,7 +145,9 @@ def test_date_and_datetime_columns():
     sheet.write(0, 0, datetime.date(2020, 1, 25), fmt)
     sheet.write(0, 1, datetime.datetime(2020, 3, 4, 1, 25, 18), fmt)
     sheet.write(1, 0, datetime.date(2020, 1, 26), fmt)
-    sheet.write(1, 1, 23123.2505327, fmt)  # tested in LibreOffice -- at least, to milliseconds
+    sheet.write(
+        1, 1, 23123.2505327, fmt
+    )  # tested in LibreOffice -- at least, to milliseconds
     assert_table_equals(
         do_convert_data(workbook, header_rows=""),
         pyarrow.table(
@@ -166,7 +170,7 @@ def test_date_and_datetime_columns():
 
 def test_datetime_overflow():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
+    sheet = workbook.add_sheet("X")
     fmt = xl.easyxf(num_format_str="dd-mmm-yyyy")
     sheet.write(0, 0, datetime.date(1100, 1, 1), fmt)
     sheet.write(0, 1, datetime.date(1901, 1, 1), fmt)
@@ -194,7 +198,7 @@ def test_datetime_overflow():
 
 def test_skip_null_values():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
+    sheet = workbook.add_sheet("X")
     sheet.write(1, 0, 3.0)
     sheet.write(3, 0, 4.0)
     assert_table_equals(
@@ -205,7 +209,7 @@ def test_skip_null_values():
 
 def test_skip_null_columns():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
+    sheet = workbook.add_sheet("X")
     sheet.write(0, 0, 3.0)
     sheet.write(0, 3, 4.0)
     sheet.write(1, 0, 3.0)
@@ -227,7 +231,7 @@ def test_skip_null_columns():
 
 def test_backfill_column_at_end():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
+    sheet = workbook.add_sheet("X")
     sheet.write(0, 0, 3.0)
     sheet.write(0, 1, 4.0)
     sheet.write(1, 1, 4.0)
@@ -240,7 +244,7 @@ def test_backfill_column_at_end():
 
 def test_bool_becomes_str():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
+    sheet = workbook.add_sheet("X")
     sheet.write(0, 0, True)
     sheet.write(1, 0, False)
     result, stdout = do_convert_data(workbook, header_rows="", include_stdout=True)
@@ -261,8 +265,8 @@ def test_invalid_xls_file():
 
 def test_skip_rows():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, 'Hi')
+    sheet = workbook.add_sheet("X")
+    sheet.write(0, 0, "Hi")
     sheet.write(1, 0, 1.0)
     sheet.write(3, 0, 1.0)
     result, stdout = do_convert_data(
@@ -274,10 +278,10 @@ def test_skip_rows():
 
 def test_skip_columns():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, 'a')
-    sheet.write(0, 1, 'b')
-    sheet.write(0, 2, 'c')
+    sheet = workbook.add_sheet("X")
+    sheet.write(0, 0, "a")
+    sheet.write(0, 1, "b")
+    sheet.write(0, 2, "c")
     result, stdout = do_convert_data(
         workbook, max_columns=1, header_rows="", include_stdout=True
     )
@@ -287,11 +291,11 @@ def test_skip_columns():
 
 def test_header_rows():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, 'ColA')
-    sheet.write(0, 1, 'ColB')
-    sheet.write(1, 0, 'a')
-    sheet.write(1, 1, 'b')
+    sheet = workbook.add_sheet("X")
+    sheet.write(0, 0, "ColA")
+    sheet.write(0, 1, "ColB")
+    sheet.write(1, 0, "a")
+    sheet.write(1, 1, "b")
     with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
         result = do_convert_data(
             workbook, header_rows="0-1", header_rows_file=header_file.name
@@ -304,56 +308,71 @@ def test_header_rows():
 
 def test_header_rows_convert_to_str():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, datetime.date(2020, 1, 25), xl.easyxf(num_format_str="dd-mmm-yyyy"))
+    sheet = workbook.add_sheet("X")
+    sheet.write(
+        0, 0, datetime.date(2020, 1, 25), xl.easyxf(num_format_str="dd-mmm-yyyy")
+    )
     sheet.write(0, 1, 123.4213)
     sheet.write(0, 2, 123.4213, xl.easyxf(num_format_str="#.00"))
     # Leave D1 blank
     # It'd be nice to set E1="", but xlwt treats "" as blank
-    sheet.write(1, 0, 'a')
-    sheet.write(1, 1, 'b')
-    sheet.write(1, 2, 'c')
-    sheet.write(1, 3, 'd')
+    sheet.write(1, 0, "a")
+    sheet.write(1, 1, "b")
+    sheet.write(1, 2, "c")
+    sheet.write(1, 3, "d")
     with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
         # ignore result
-        do_convert_data(
-            workbook, header_rows="0-1", header_rows_file=header_file.name
-        )
+        do_convert_data(workbook, header_rows="0-1", header_rows_file=header_file.name)
         with pyarrow.ipc.open_file(header_file.name) as header_reader:
             header_table = header_reader.read_all()
-    assert_table_equals(header_table, pyarrow.table({"A": ["25-Jan-2020"], "B": ["123.4213"], "C": ["123.42"], "D": pyarrow.array([None], pyarrow.utf8())}))
+    assert_table_equals(
+        header_table,
+        pyarrow.table(
+            {
+                "A": ["25-Jan-2020"],
+                "B": ["123.4213"],
+                "C": ["123.42"],
+                "D": pyarrow.array([None], pyarrow.utf8()),
+            }
+        ),
+    )
 
 
 def test_header_truncated():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, 'xy1')
-    sheet.write(0, 1, 'xy2')
-    sheet.write(1, 0, 'a')
-    sheet.write(1, 1, 'b')
+    sheet = workbook.add_sheet("X")
+    sheet.write(0, 0, "xy1")
+    sheet.write(0, 1, "xy2")
+    sheet.write(1, 0, "a")
+    sheet.write(1, 1, "b")
     with tempfile.NamedTemporaryFile(suffix="-headers.arrow") as header_file:
         result, stdout = do_convert_data(
-            workbook, max_bytes_per_value=2, header_rows="0-1", header_rows_file=header_file.name, include_stdout=True
+            workbook,
+            max_bytes_per_value=2,
+            header_rows="0-1",
+            header_rows_file=header_file.name,
+            include_stdout=True,
         )
         with pyarrow.ipc.open_file(header_file.name) as header_reader:
             header_table = header_reader.read_all()
     assert_table_equals(result, pyarrow.table({"A": ["a"], "B": ["b"]}))
     assert_table_equals(header_table, pyarrow.table({"A": ["xy"], "B": ["xy"]}))
     assert stdout == b"".join(
-        [
-            b"truncated 2 values (value byte limit is 2; see row 0 column A)\n"
-        ]
+        [b"truncated 2 values (value byte limit is 2; see row 0 column A)\n"]
     )
 
 
 def test_values_truncated():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, 'abcde')
-    sheet.write(0, 1, 'fghijklmn')
-    sheet.write(0, 2, 'opq')
+    sheet = workbook.add_sheet("X")
+    sheet.write(0, 0, "abcde")
+    sheet.write(0, 1, "fghijklmn")
+    sheet.write(0, 2, "opq")
     result, stdout = do_convert_data(
-        workbook, max_bytes_per_value=3, header_rows="", include_stdout=True,
+        workbook,
+        max_bytes_per_value=3,
+        header_rows="",
+        include_stdout=True,
     )
     assert_table_equals(
         result, pyarrow.table({"A": ["abc"], "B": ["fgh"], "C": ["opq"]})
@@ -363,24 +382,29 @@ def test_values_truncated():
 
 def test_truncate_do_not_cause_invalid_utf8():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    for i, s in enumerate([
-        # Examples from https://en.wikipedia.org/wiki/UTF-8
-        "AAAA",
-        "AA\u00A2",  # ¢ (2 bytes) -- keep
-        "AAA\u00A2",  # ¢ (2 bytes) -- drop both bytes
-        "A\u0939",  # ह (3 bytes) -- keep
-        "AA\u0939",  # ह (3 bytes) -- drop all three bytes
-        "AAA\u0939",  # ह (3 bytes) -- drop all three bytes
-        "\U00010348",  # 𐍈 (4 bytes) -- keep
-        "A\U00010348",  # 𐍈 (4 bytes) -- drop all four bytes
-        "AA\U00010348",  # 𐍈 (4 bytes) -- drop all four bytes
-        "AAA\U00010348",  # 𐍈 (4 bytes) -- drop all four bytes
-    ]):
+    sheet = workbook.add_sheet("X")
+    for i, s in enumerate(
+        [
+            # Examples from https://en.wikipedia.org/wiki/UTF-8
+            "AAAA",
+            "AA\u00A2",  # ¢ (2 bytes) -- keep
+            "AAA\u00A2",  # ¢ (2 bytes) -- drop both bytes
+            "A\u0939",  # ह (3 bytes) -- keep
+            "AA\u0939",  # ह (3 bytes) -- drop all three bytes
+            "AAA\u0939",  # ह (3 bytes) -- drop all three bytes
+            "\U00010348",  # 𐍈 (4 bytes) -- keep
+            "A\U00010348",  # 𐍈 (4 bytes) -- drop all four bytes
+            "AA\U00010348",  # 𐍈 (4 bytes) -- drop all four bytes
+            "AAA\U00010348",  # 𐍈 (4 bytes) -- drop all four bytes
+        ]
+    ):
         sheet.write(i, 0, s)
 
     result, stdout = do_convert_data(
-        workbook, max_bytes_per_value=4, header_rows="", include_stdout=True,
+        workbook,
+        max_bytes_per_value=4,
+        header_rows="",
+        include_stdout=True,
     )
     expected = pyarrow.table(
         {
@@ -404,24 +428,31 @@ def test_truncate_do_not_cause_invalid_utf8():
 
 def test_convert_float_to_string_and_report():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
+    sheet = workbook.add_sheet("X")
     sheet.write(0, 0, 3.4)
-    sheet.write(1, 0, 's')
+    sheet.write(1, 0, "s")
     sheet.write(2, 0, -2.2)
-    result, stdout = do_convert_data(workbook, header_rows="", include_stdout=True,)
+    result, stdout = do_convert_data(
+        workbook,
+        header_rows="",
+        include_stdout=True,
+    )
     assert_table_equals(result, pyarrow.table({"A": ["3.4", "s", "-2.2"]}))
     assert stdout == b"interpreted 2 Numbers as String; see row 0 column A\n"
 
 
 def test_stop_after_byte_total_limit():
     workbook = xl.Workbook()
-    sheet = workbook.add_sheet('X')
-    sheet.write(0, 0, 'abcd')
-    sheet.write(0, 1, 'efgh')
-    sheet.write(1, 0, 'ijkl')
-    sheet.write(1, 1, 'mnop')
+    sheet = workbook.add_sheet("X")
+    sheet.write(0, 0, "abcd")
+    sheet.write(0, 1, "efgh")
+    sheet.write(1, 0, "ijkl")
+    sheet.write(1, 1, "mnop")
     result, stdout = do_convert_data(
-        workbook, max_bytes_total=8, header_rows="", include_stdout=True,
+        workbook,
+        max_bytes_total=8,
+        header_rows="",
+        include_stdout=True,
     )
     assert_table_equals(result, pyarrow.table({"A": ["abcd"], "B": ["efgh"]}))
     assert stdout == b"stopped at limit of 8 bytes of data\n"

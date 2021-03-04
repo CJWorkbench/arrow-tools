@@ -1,3 +1,9 @@
+v1.1.0 - 2021-03-04
+-------------------
+
+* Upgrade underlying Arrow to 3.0.0.
+* Upgrade underlying libxls to 1.6.2.
+
 v1.0.0 - 2020-09-22
 -------------------
 

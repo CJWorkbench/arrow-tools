@@ -218,6 +218,8 @@ struct XlsTableBuilder : ExcelTableBuilder {
     NextAction
     addCell(int64_t row, int32_t col, xls::xlsCell& cell)
     {
+        if (cell.id == XLS_RECORD_BLANK) return CONTINUE;
+
         auto* columnBuilderAndHeaderColumnBuilder(this->column(col));
         if (!columnBuilderAndHeaderColumnBuilder) return CONTINUE;
         auto& columnBuilder = columnBuilderAndHeaderColumnBuilder->first;
@@ -333,7 +335,7 @@ static ReadXlsResult readXls(const char* xlsFilename) {
             }
             for (int64_t rowIndex = 0; nextAction != ExcelTableBuilder::STOP && rowIndex <= maxRow; rowIndex++) {
                 xls::xlsRow* row = xls::xls_row(sheet, rowIndex);
-                for (int64_t colIndex = 0; nextAction != ExcelTableBuilder::STOP && colIndex < rows.lastcol; colIndex++) {
+                for (int64_t colIndex = 0; nextAction != ExcelTableBuilder::STOP && colIndex <= rows.lastcol; colIndex++) {
                     xls::xlsCell& cell = row->cells.cell[colIndex];
                     nextAction = builder.addCell(rowIndex, colIndex, cell);
                 }

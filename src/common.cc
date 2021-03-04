@@ -11,7 +11,7 @@ void writeArrowTable(const arrow::Table& arrowTable, const std::string& path)
     "opening output stream"
   ));
   std::shared_ptr<arrow::ipc::RecordBatchWriter> fileWriter(ASSERT_ARROW_OK(
-    arrow::ipc::NewFileWriter(
+    arrow::ipc::MakeFileWriter(
       outputStream.get(),
       arrowTable.schema(),
       arrow::ipc::IpcWriteOptions { .use_threads = false }
