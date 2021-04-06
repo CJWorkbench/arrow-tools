@@ -1,12 +1,13 @@
 import math
-from pathlib import Path
 import struct
 import subprocess
+from pathlib import Path
 from typing import Dict, Optional, Tuple
+
 import numpy as np
 import pyarrow as pa
-from .util import arrow_file
 
+from .util import arrow_file
 
 ALL_CHECKS = {
     "safe": True,
@@ -317,5 +318,11 @@ def test_floats_all_finite_infinity_is_invalid():
 
 def test_timestamp():
     table = pa.table({"date64": pa.array([1231241234, 235234234], pa.timestamp("s"))})
+    with arrow_file(table) as path:
+        assert validate(path, ALL_CHECKS) is None
+
+
+def test_date32():
+    table = pa.table({"date32": pa.array([123114, -12312341, None], pa.date32())})
     with arrow_file(table) as path:
         assert validate(path, ALL_CHECKS) is None
